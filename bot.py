@@ -10,7 +10,6 @@ RAILWAY_URL = "https://hsl-corp-production-9678.up.railway.app"
 # --- CONFIG ---
 BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip().strip('"').strip("'")
 OWNER_ID = int(os.getenv("OWNER_ID", "1517901703263944758"))
-LOG_CHANNEL_ID = int(os.getenv("LOG_CHANNEL_ID", "0"))  # Apne Log Channel ka ID yahan set karein
 TARGET_PING_USER = "<@1517901703263944758>"            # Tag/Mention User ID
 
 DB_PATH = "hsl.db"
@@ -33,8 +32,9 @@ def init_db():
     db("CREATE TABLE IF NOT EXISTS discord_whitelist (user_id TEXT, command TEXT)")
     db("CREATE TABLE IF NOT EXISTS apps (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, token TEXT UNIQUE)")
     db("CREATE TABLE IF NOT EXISTS tool_users (id INTEGER PRIMARY KEY AUTOINCREMENT, username TEXT UNIQUE, password TEXT, app_token TEXT, status TEXT DEFAULT 'active', hwid TEXT, gmail TEXT)")
+    db("CREATE TABLE IF NOT EXISTS bot_settings (key TEXT UNIQUE, value TEXT)")
     
-    # Auto-add gmail column if not present
+    # Auto-add gmail column if missing
     try:
         db("ALTER TABLE tool_users ADD COLUMN gmail TEXT")
     except Exception:
@@ -43,6 +43,12 @@ def init_db():
     print("✅ DB Ready")
 
 init_db()
+
+def get_log_channel_id():
+    res = db("SELECT value FROM bot_settings WHERE key='log_channel_id'", fetch=True)
+    if res and res[0][0]:
+        return int(res[0][0])
+    return 0
 
 def is_owner_or_whitelisted(user_id, cmd_name):
     if user_id == OWNER_ID: return True
@@ -72,10 +78,19 @@ async def ping_s(interaction: discord.Interaction):
 
 @bot.tree.command(name="help", description="📜 Help menu")
 async def help_s(interaction: discord.Interaction):
-    desc = "**👑 AUTH:** `/create` `/list` `/ban` `/unban` `/delete` `/resethwid` `/apps` `/notify_login` `/update_gmail`\n**🛡️ WL:** `/whitelist_add` `/whitelist_remove` `/whitelist_list`\n**⚡:** `/ping` `/help`"
+    desc = "**👑 AUTH:** `/create` `/list` `/ban` `/unban` `/delete` `/resethwid` `/apps` `/set_log_channel` `/notify_login` `/update_gmail`\n**🛡️ WL:** `/whitelist_add` `/whitelist_remove` `/whitelist_list`\n**⚡:** `/ping` `/help`"
     em = stylish_embed("✨ HSL AUTH - Help", desc, 0x5865F2)
     if bot.user: em.set_thumbnail(url=bot.user.display_avatar.url)
     await interaction.response.send_message(embed=em)
+
+# ========== SET LOG CHANNEL COMMAND ==========
+@bot.tree.command(name="set_log_channel", description="⚙️ Set the channel where login alerts will be posted")
+async def set_log_channel_s(interaction: discord.Interaction, channel: discord.TextChannel):
+    if not is_owner_or_whitelisted(interaction.user.id, "set_log_channel"):
+        return await interaction.response.send_message(embed=stylish_embed("❌ Denied", "Sirf Owner/Whitelisted users!", 0xFF0000), ephemeral=True)
+    
+    db("INSERT OR REPLACE INTO bot_settings (key, value) VALUES ('log_channel_id', ?)", (str(channel.id),))
+    await interaction.response.send_message(embed=stylish_embed("🎯 Log Channel Set", f"Login audit logs ab se {channel.mention} me aayenge! 🟢", 0x00FF99))
 
 # ========== WHITELIST ==========
 @bot.tree.command(name="whitelist_add", description="➕ Access do")
@@ -107,7 +122,6 @@ async def update_gmail_s(interaction: discord.Interaction, username: str, email:
         return await interaction.response.send_message(embed=stylish_embed("❌ Denied", "No Access!", 0xFF0000), ephemeral=True)
     
     await interaction.response.defer()
-    
     db("UPDATE tool_users SET gmail=? WHERE username=?", (email.strip(), username.strip()))
     
     try:
@@ -129,7 +143,7 @@ async def notify_login_s(
     if not is_owner_or_whitelisted(interaction.user.id, "notify_login"):
         return await interaction.response.send_message(embed=stylish_embed("❌ Denied", "No Access!", 0xFF0000), ephemeral=True)
     
-    # Exact Time Calculations (UTC & IST)
+    # Exact Time Calculations
     utc_now = datetime.datetime.now(datetime.timezone.utc)
     ist_now = utc_now + datetime.timedelta(hours=5, minutes=30)
     
@@ -159,13 +173,14 @@ async def notify_login_s(
     if bot.user:
         embed.set_footer(text="HSL SECURE INFRASTRUCTURE • REALTIME LOGS", icon_url=bot.user.display_avatar.url)
     
-    target_channel = bot.get_channel(LOG_CHANNEL_ID) if LOG_CHANNEL_ID != 0 else None
+    log_channel_id = get_log_channel_id()
+    target_channel = bot.get_channel(log_channel_id) if log_channel_id != 0 else None
     
     if target_channel:
         await target_channel.send(content=f"🚨 **LOGIN DETECTED** | Attention: {TARGET_PING_USER}", embed=embed)
-        await interaction.response.send_message(embed=stylish_embed("✅ Audit Sent", f"Login log dispatched to <#{LOG_CHANNEL_ID}>", 0x00FF99), ephemeral=True)
+        await interaction.response.send_message(embed=stylish_embed("✅ Audit Sent", f"Login log dispatched to {target_channel.mention}", 0x00FF99), ephemeral=True)
     else:
-        await interaction.response.send_message(content=f"🚨 **LOGIN DETECTED** | Attention: {TARGET_PING_USER}", embed=embed)
+        await interaction.response.send_message(content=f"🚨 **LOGIN DETECTED** | Attention: {TARGET_PING_USER}\n*(Tip: Set log channel using `/set_log_channel`)*", embed=embed)
 
 # ========== AUTH COMMANDS ==========
 @bot.tree.command(name="list", description="👤 All users")

@@ -1289,16 +1289,11 @@ def api_edit_user():
     )
     return jsonify({"message": f"Updated {old_u}"})
   except Exception:
-    return jsonify({"message": "Update failed."})
+        return jsonify({"message": "Update failed."})
 
 
-@app.route("/api/auth_login", methods=["POST"])
-@rate_limit(max_requests=10, window_seconds=60)
-def api_auth_login():
-  data = request.json or {}
-
-  # Discord Webhook URL (Apne #login-detail channel ka Webhook URL yahan daalein)
-DISCORD_LOG_WEBHOOK_URL = "https://discord.com/api/webhooks/1547186725615443990/urThqJMMrsVdszGqrjWpFbTqPBg3mfpJE_0cJXJfhs-ZO5WJvUny2JkU7Ze13BgoFTXn"
+# DISCORD WEBHOOK LOGGING
+DISCORD_LOG_WEBHOOK_URL = "https://discord.com/api/webhooks/1547186725615443990/urThqJMMrsVdszGqrjwpFbTqPBg3mfpJE_0cJXJfhs-ZO5WJvUny2JKu7Z6..."
 
 def send_login_log(username, status_msg, hwid, ip_addr):
     if not DISCORD_LOG_WEBHOOK_URL or "YOUR_DISCORD" in DISCORD_LOG_WEBHOOK_URL:
@@ -1323,47 +1318,48 @@ def send_login_log(username, status_msg, hwid, ip_addr):
     except Exception as e:
         print(f"Failed to send Discord Log: {e}")
 
+
 @app.route("/api/auth_login", methods=["POST"])
 @rate_limit(max_requests=10, window_seconds=60)
 def api_auth_login():
-  data = request.json or {}
+    data = request.json or {}
 
-  username = data.get("username")
-  password = data.get("password")
-  hwid = data.get("hwid")
-  token = data.get("token")
-  client_sig = data.get("sig")
-  client_ip = request.remote_addr
+    username = data.get("username")
+    password = data.get("password")
+    hwid = data.get("hwid")
+    token = data.get("token")
+    client_sig = data.get("sig")
+    client_ip = request.remote_addr
 
-  if not username or not password or not token or not hwid:
-    return jsonify({"status": "invalid", "message": "Malformed request parameters"}), 400
+    if not username or not password or not token or not hwid:
+        return jsonify({"status": "invalid", "message": "Malformed request parameters"}), 400
 
-  expected_sig = hashlib.sha256(f"{username}:{hwid}:{token}".encode()).hexdigest()
-  if client_sig and client_sig != expected_sig:
-    send_login_log(username, "tampered", hwid, client_ip)
-    return jsonify({"status": "tampered", "message": "Request payload tampered!"}), 403
+    expected_sig = hashlib.sha256(f"{username}:{hwid}:{token}".encode()).hexdigest()
+    if client_sig and client_sig != expected_sig:
+        send_login_log(username, "tampered", hwid, client_ip)
+        return jsonify({"status": "tampered", "message": "Request payload tampered!"}), 403
 
-  res = db("SELECT * FROM tool_users WHERE username=? AND password=? AND app_token=?", (username, password, token), True)
-  if not res:
-    send_login_log(username, "invalid_credentials", hwid, client_ip)
-    return jsonify({"status": "invalid", "message": "Incorrect credentials"})
+    res = db("SELECT * FROM tool_users WHERE username=? AND password=? AND app_token=?", (username, password, token), True)
+    if not res:
+        send_login_log(username, "invalid_credentials", hwid, client_ip)
+        return jsonify({"status": "invalid", "message": "Incorrect credentials"})
 
-  user_row = res[0]
-  if user_row[4] == "banned":
-    send_login_log(username, "banned_attempt", hwid, client_ip)
-    return jsonify({"status": "banned", "message": "Account suspended"})
+    user_row = res[0]
+    if user_row[4] == "banned":
+        send_login_log(username, "banned_attempt", hwid, client_ip)
+        return jsonify({"status": "banned", "message": "Account suspended"})
 
-  if not user_row[5]:
-    db("UPDATE tool_users SET hwid=?, status='active' WHERE username=?", (hwid, username))
-    send_login_log(username, "valid (HWID Bound)", hwid, client_ip)
-    return jsonify({"status": "valid", "message": "HWID Bound Successfully"})
-  else:
-    if user_row[5] == hwid:
-      send_login_log(username, "valid", hwid, client_ip)
-      return jsonify({"status": "valid", "message": "Authentication Success"})
+    if not user_row[5]:
+        db("UPDATE tool_users SET hwid=?, status='active' WHERE username=?", (hwid, username))
+        send_login_log(username, "valid (HWID Bound)", hwid, client_ip)
+        return jsonify({"status": "valid", "message": "HWID Bound Successfully"})
     else:
-      send_login_log(username, "hwid_mismatch", hwid, client_ip)
-      return jsonify({"status": "hwid_mismatch", "message": "Hardware mismatch detected"})
+        if user_row[5] == hwid:
+            send_login_log(username, "valid", hwid, client_ip)
+            return jsonify({"status": "valid", "message": "Authentication Success"})
+        else:
+            send_login_log(username, "hwid_mismatch", hwid, client_ip)
+            return jsonify({"status": "hwid_mismatch", "message": "Hardware mismatch detected"})
 
 
 # ==========================================

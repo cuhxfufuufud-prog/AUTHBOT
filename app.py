@@ -1299,20 +1299,46 @@ def send_login_log(username, status_msg, hwid, ip_addr):
     if not DISCORD_LOG_WEBHOOK_URL or "YOUR_DISCORD" in DISCORD_LOG_WEBHOOK_URL:
         return
     
-    color = 65280 if status_msg == "valid" else 16711680  # Green for success, Red for fail
+    # Live Timestamp for Discord (<t:EPOCH:F>)
+    current_time = int(time.time())
+    timestamp_str = f"<t:{current_time}:F> (<t:{current_time}:R>)"
+    
+    # Status Styles & Colors
+    if status_msg == "valid":
+        color = 0x2ECC71  # Vibrant Emerald Green
+        status_badge = "🟢 `SUCCESS / AUTHENTICATED`"
+    elif "HWID Bound" in status_msg:
+        color = 0x3498DB  # Electric Blue
+        status_badge = "🔵 `NEW DEVICE BOUND`"
+    elif status_msg == "hwid_mismatch":
+        color = 0xE67E22  # Orange Warning
+        status_badge = "🟠 `HWID MISMATCH DETECTED`"
+    else:
+        color = 0xE74C3C  # Crimson Red
+        status_badge = f"🔴 `FAILED ({status_msg.upper()})`"
+
     payload = {
+        "username": "HSL Security Sentinel",
+        "avatar_url": "https://i.imgur.com/8N41A5R.png", # HSL Logo URL
         "embeds": [{
-            "title": "🎯 User Login Audit Log",
+            "title": "🛡️ HSL CORPORATION • LOGIN AUDIT LOG",
             "color": color,
+            "description": f"A new authentication request was processed by the core system.",
             "fields": [
-                {"name": "Username", "value": f"`{username}`", "inline": True},
-                {"name": "Status", "value": f"`{status_msg}`", "inline": True},
-                {"name": "IP Address", "value": f"`{ip_addr}`", "inline": True},
-                {"name": "HWID", "value": f"`{hwid}`", "inline": False}
+                {"name": "👤 User Identity", "value": f"```{username}```", "inline": True},
+                {"name": "📊 Security Status", "value": status_badge, "inline": True},
+                {"name": "\u200b", "value": "\u200b", "inline": True}, # Spacing column
+                {"name": "⏰ Timestamp", "value": timestamp_str, "inline": False},
+                {"name": "🌐 IP Address", "value": f"[{ip_addr}](https://ip-api.com/#'{ip_addr}')", "inline": True},
+                {"name": "💻 Hardware ID (HWID)", "value": f"```{hwid}```", "inline": False}
             ],
-            "footer": {"text": "HSL AUTH SYSTEM • Audit Logging"}
+            "footer": {
+                "text": "HSL AUTH SECURITY ENGINE v2.0 • Confidential Audit Trail",
+                "icon_url": "https://i.imgur.com/8N41A5R.png"
+            }
         }]
     }
+    
     try:
         requests.post(DISCORD_LOG_WEBHOOK_URL, json=payload, timeout=3)
     except Exception as e:

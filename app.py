@@ -1047,8 +1047,9 @@ def dash():
         (
             "<div class='flex justify-between bg-black/80 border"
             " border-white/10 rounded-xl px-4 py-3'>"
-            f"<span>{k[1]}</span><span class='{'text-green-400' if k[3] =="
-            f" 'unused' else 'text-red-400'}'>● {k[3]}</span></div>"
+            f"<span>{k[1]}</span>"
+            f"<span class='{'text-green-400' if k[3] == 'unused' else 'text-red-400'}'>"
+            f"● {k[3]}</span></div>"
         )
         for k in keys
     ])

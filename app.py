@@ -1319,7 +1319,7 @@ def send_login_log(username, status_msg, hwid, ip_addr):
 
     payload = {
         "username": "HSL AUTH BOT",
-        "avatar_url": "https://i.imgur.com/8N41A5R.png", # HSL Logo URL
+        "avatar_url": "https://images-ext-1.discordapp.net/external/H9ZL2wi0olXisnxXBPBNi8GO6sQebrD5_SwF-EfuulM/https/media3.giphy.com/media/v1.Y2lkPTc5MGI3NjExZ3RqemR3c3A0MHl3NWw1NHE4a2FjdWVkdDdqdXppaXdxdHhobGF5ayZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/iBILBPeCHDVuELjOND/giphy.gif", # HSL Logo URL
         "embeds": [{
             "title": "🛡️ HSL CORPORATION • LOGIN AUDIT LOG",
             "color": color,

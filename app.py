@@ -1293,7 +1293,7 @@ def api_edit_user():
 
 
 # DISCORD WEBHOOK LOGGING
-DISCORD_LOG_WEBHOOK_URL = "https://discord.com/api/webhooks/1547186725615443990/urThqJMMrsVdszGqrjWpFbTqPBg3mfpJE_0cJXJfhs-ZO5WJvUny2JkU7Ze13BgoFTXn"
+DISCORD_LOG_WEBHOOK_URL = "https://discord.com/api/webhooks/1547547371406364763/MtVdX9N_4nKJ_AYWO9tsBm8hA64KkYvFa3esmyfGhYq9jEXbwcTinVi0B9fziOd0WhSl"
 
 def send_login_log(username, status_msg, hwid, ip_addr):
     if not DISCORD_LOG_WEBHOOK_URL or "YOUR_DISCORD" in DISCORD_LOG_WEBHOOK_URL:
@@ -1318,7 +1318,7 @@ def send_login_log(username, status_msg, hwid, ip_addr):
         status_badge = f"🔴 `FAILED ({status_msg.upper()})`"
 
     payload = {
-        "username": "HSL Security Sentinel",
+        "username": "HSL AUTH BOT",
         "avatar_url": "https://i.imgur.com/8N41A5R.png", # HSL Logo URL
         "embeds": [{
             "title": "🛡️ HSL CORPORATION • LOGIN AUDIT LOG",

@@ -150,9 +150,22 @@ def init_db():
             app_token TEXT, 
             status TEXT, 
             hwid TEXT, 
-            created_at TEXT
+            created_at TEXT,
+            expiry_type TEXT NOT NULL DEFAULT 'lifetime',
+            expires_at TEXT
         )
     """)
+
+  # Safe migration for existing Railway SQLite databases.
+  # Existing users are treated as lifetime users and their data is preserved.
+  cur.execute("PRAGMA table_info(tool_users)")
+  existing_columns = {row[1] for row in cur.fetchall()}
+  if "created_at" not in existing_columns:
+    cur.execute("ALTER TABLE tool_users ADD COLUMN created_at TEXT")
+  if "expiry_type" not in existing_columns:
+    cur.execute("ALTER TABLE tool_users ADD COLUMN expiry_type TEXT NOT NULL DEFAULT 'lifetime'")
+  if "expires_at" not in existing_columns:
+    cur.execute("ALTER TABLE tool_users ADD COLUMN expires_at TEXT")
 
   con.commit()
   con.close()
@@ -729,6 +742,14 @@ DASHBOARD_HTML = (
           <input id="newUsername" placeholder="Username" class="flex-1 bg-black/80 border border-white/15 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-cyan-400">
           <input id="newPassword" placeholder="Password" class="flex-1 bg-black/80 border border-white/15 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-cyan-400">
         </div>
+        <div class="flex gap-3 mt-3">
+          <select id="expiryType" onchange="toggleExpiryDays()" class="flex-1 bg-black/80 border border-white/15 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-cyan-400">
+            <option value="lifetime">Lifetime (No Expiry)</option>
+            <option value="custom">Custom Expiry (Days)</option>
+          </select>
+          <input id="expiryDays" type="number" min="1" max="36500" value="30" placeholder="Days" class="hidden flex-1 bg-black/80 border border-white/15 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-cyan-400">
+        </div>
+        <p class="mt-2 text-[10px] text-zinc-500">Lifetime users never expire. Custom expiry starts from the time this user is created.</p>
         <button onclick="createUser()" class="mt-4 w-full bg-gradient-to-r from-cyan-400 to-indigo-600 hover:opacity-90 py-3 rounded-xl text-sm font-bold shadow-[0_0_20px_rgba(34,211,238,0.4)] transition">Create User</button>
       </div>
     </div>
@@ -881,24 +902,40 @@ function selectApp(token) {
     document.getElementById('tokenDisplay').innerText = token;
 }
 
+function toggleExpiryDays() {
+    const type = document.getElementById('expiryType').value;
+    const days = document.getElementById('expiryDays');
+    if (type === 'custom') {
+        days.classList.remove('hidden');
+    } else {
+        days.classList.add('hidden');
+    }
+}
+
 async function createUser() {
     let u = document.getElementById('newUsername').value.trim();
     let p = document.getElementById('newPassword').value.trim();
     let token = document.getElementById('tokenDisplay').innerText;
-    
+    let expiry_type = document.getElementById('expiryType').value;
+    let days = parseInt(document.getElementById('expiryDays').value || '30', 10);
+
     if(!u || !p) {
-        alert('Fill fields!');
+        alert('Fill username and password!');
         return;
     }
-    
+    if (expiry_type === 'custom' && (!Number.isInteger(days) || days < 1 || days > 36500)) {
+        alert('Expiry days must be between 1 and 36500.');
+        return;
+    }
+
     let res = await fetch('/api/create_user', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({username: u, password: p, app_token: token})
+        body: JSON.stringify({username: u, password: p, app_token: token, expiry_type: expiry_type, days: days})
     });
     let data = await res.json();
-    alert(data.message);
-    location.reload();
+    alert(data.message || data.error || 'Request completed.');
+    if (res.ok && data.message && data.message.startsWith('User Created:')) location.reload();
 }
 
 async function deleteUser(username) {
@@ -1061,8 +1098,8 @@ def dash():
 
   tool_users = (
       db(
-          "SELECT * FROM tool_users WHERE app_token IN (SELECT token FROM apps"
-          " WHERE owner_email=?)",
+          "SELECT id, username, password, app_token, status, hwid, created_at, expiry_type, expires_at "
+          "FROM tool_users WHERE app_token IN (SELECT token FROM apps WHERE owner_email=?)",
           (email,),
           True,
       )
@@ -1082,12 +1119,18 @@ def dash():
     hwid_short = (u[5][:15] + "...") if u[5] else "Not Bound"
     status_color = "text-green-400" if u[4] == "active" else "text-red-400"
     ban_text = "Ban" if u[4] == "active" else "Unban"
+    expiry_type = u[7] if len(u) > 7 and u[7] else "lifetime"
+    expires_at = u[8] if len(u) > 8 else None
+    if expiry_type == "lifetime" or not expires_at:
+      expiry_label = "Lifetime"
+    else:
+      expiry_label = f"Expires: {expires_at.replace('T', ' ')[:19]}"
 
     tool_users_list_html += f"""
         <div class='flex justify-between items-center bg-black/80 border border-white/10 rounded-xl px-4 py-3 mb-2'>
             <div>
                 <span class='text-white font-bold'>{u[1]}</span><span class='text-zinc-500'> / {u[2]}</span><br>
-                <span class='text-[10px] text-zinc-500'>HWID: {hwid_short} | Status: <span class='{status_color}'>{u[4].upper()}</span></span>
+                <span class='text-[10px] text-zinc-500'>HWID: {hwid_short} | Status: <span class='{status_color}'>{u[4].upper()}</span> | Expiry: <span class='text-cyan-300'>{expiry_label}</span></span>
             </div>
             <div class='flex gap-2 flex-wrap justify-end max-w-[60%]'>
                 <button onclick="editUser('{u[1]}','{u[2]}')" class='bg-blue-900/50 border border-blue-500/30 px-3 py-1 rounded-lg text-[10px] hover:bg-blue-800 transition'>Edit</button>
@@ -1208,29 +1251,48 @@ def api_delete_app():
 def api_create_user():
   data = request.json or {}
   app_token = data.get("app_token")
-  username = data.get("username", "").strip()
-  password = data.get("password", "").strip()
+  username = str(data.get("username", "")).strip()
+  password = str(data.get("password", "")).strip()
+  expiry_type = str(data.get("expiry_type", "lifetime")).strip().lower()
 
   if not username or not password or not app_token:
-    return jsonify({"message": "Missing required fields!"})
+    return jsonify({"message": "Missing required fields!"}), 400
+
+  if expiry_type not in ("lifetime", "custom"):
+    return jsonify({"message": "Invalid expiry type."}), 400
+
+  expires_at = None
+  if expiry_type == "custom":
+    try:
+      days = int(data.get("days", 0))
+    except (TypeError, ValueError):
+      return jsonify({"message": "Expiry days must be a whole number."}), 400
+    if days < 1 or days > 36500:
+      return jsonify({"message": "Expiry days must be between 1 and 36500."}), 400
+    expires_at = (datetime.now() + timedelta(days=days)).isoformat(timespec="seconds")
 
   app_data = db("SELECT owner_email FROM apps WHERE token=?", (app_token,), True)
   if not app_data:
-    return jsonify({"message": "Invalid App Token!"})
+    return jsonify({"message": "Invalid App Token!"}), 400
 
   email = app_data[0][0]
   if check_limit(email):
-    return jsonify({"message": "Plan limit reached!"})
+    return jsonify({"message": "Plan limit reached!"}), 403
 
   try:
     db(
-        "INSERT INTO tool_users (username, password, app_token, status,"
-        " created_at) VALUES (?,?,?,?,?)",
-        (username, password, app_token, "active", datetime.now().isoformat()),
+        "INSERT INTO tool_users (username, password, app_token, status, created_at, expiry_type, expires_at) "
+        "VALUES (?,?,?,?,?,?,?)",
+        (username, password, app_token, "active", datetime.now().isoformat(timespec="seconds"), expiry_type, expires_at),
     )
-    return jsonify({"message": f"User Created: {username}"}), 200
-  except Exception:
-    return jsonify({"message": "Username already exists!"})
+    if expiry_type == "lifetime":
+      return jsonify({"message": f"User Created: {username} (Lifetime)"}), 200
+    return jsonify({"message": f"User Created: {username} (expires in {days} days)"}), 200
+  except sqlite3.IntegrityError:
+    return jsonify({"message": "Username already exists!"}), 409
+  except Exception as exc:
+    app.logger.exception("Could not create tool user")
+    return jsonify({"message": "Could not create user due to a server error."}), 500
 
 
 @app.route("/api/delete_user", methods=["POST"])
@@ -1293,7 +1355,7 @@ def api_edit_user():
 
 
 # DISCORD WEBHOOK LOGGING
-DISCORD_LOG_WEBHOOK_URL = "https://discord.com/api/webhooks/1547547371406364763/MtVdX9N_4nKJ_AYWO9tsBm8hA64KkYvFa3esmyfGhYq9jEXbwcTinVi0B9fziOd0WhSl"
+DISCORD_LOG_WEBHOOK_URL = os.environ.get("DISCORD_LOG_WEBHOOK_URL", "").strip()
 
 def send_login_log(username, status_msg, hwid, ip_addr):
     if not DISCORD_LOG_WEBHOOK_URL or "YOUR_DISCORD" in DISCORD_LOG_WEBHOOK_URL:
@@ -1345,6 +1407,19 @@ def send_login_log(username, status_msg, hwid, ip_addr):
         print(f"Failed to send Discord Log: {e}")
 
 
+def is_tool_user_expired(expires_at):
+    """Return True when an ISO expiry timestamp is at or before now."""
+    if not expires_at:
+        return False
+    try:
+        expiry = datetime.fromisoformat(str(expires_at))
+        now = datetime.now(expiry.tzinfo) if expiry.tzinfo else datetime.now()
+        return now >= expiry
+    except (TypeError, ValueError):
+        # Fail closed if a custom expiry exists but is malformed.
+        return True
+
+
 @app.route("/api/auth_login", methods=["POST"])
 @rate_limit(max_requests=10, window_seconds=60)
 def api_auth_login():
@@ -1365,12 +1440,20 @@ def api_auth_login():
         send_login_log(username, "tampered", hwid, client_ip)
         return jsonify({"status": "tampered", "message": "Request payload tampered!"}), 403
 
-    res = db("SELECT * FROM tool_users WHERE username=? AND password=? AND app_token=?", (username, password, token), True)
+    res = db("SELECT id, username, password, app_token, status, hwid, created_at, expiry_type, expires_at FROM tool_users WHERE username=? AND password=? AND app_token=?", (username, password, token), True)
     if not res:
         send_login_log(username, "invalid_credentials", hwid, client_ip)
         return jsonify({"status": "invalid", "message": "Incorrect credentials"})
 
     user_row = res[0]
+    # New columns are appended by the migration: expiry_type at index 7,
+    # expires_at at index 8. Old records default to lifetime.
+    expiry_type = user_row[7] if len(user_row) > 7 and user_row[7] else "lifetime"
+    expires_at = user_row[8] if len(user_row) > 8 else None
+    if expiry_type == "custom" and is_tool_user_expired(expires_at):
+        send_login_log(username, "expired", hwid, client_ip)
+        return jsonify({"status": "expired", "message": "License expired. Contact the owner."}), 403
+
     if user_row[4] == "banned":
         send_login_log(username, "banned_attempt", hwid, client_ip)
         return jsonify({"status": "banned", "message": "Account suspended"})

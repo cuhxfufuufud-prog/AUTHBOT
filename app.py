@@ -5,6 +5,7 @@ import random
 import sqlite3
 import string
 import time
+import shutil
 from datetime import datetime, timedelta
 from functools import wraps
 from authlib.integrations.flask_client import OAuth
@@ -105,8 +106,31 @@ def apply_security_headers(response):
 # ==========================================
 
 
+# --- PERSISTENT RAILWAY DATABASE ---
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
+LEGACY_DB_PATH = os.path.join(APP_DIR, "hsl.db")
+
+if os.path.isdir("/data"):
+    DATABASE_PATH = "/data/hsl.db"
+else:
+    DATABASE_PATH = LEGACY_DB_PATH
+
+# Copy the old database only if the persistent DB does not exist.
+# Never overwrite an existing database in /data.
+if (
+    DATABASE_PATH != LEGACY_DB_PATH
+    and not os.path.exists(DATABASE_PATH)
+    and os.path.isfile(LEGACY_DB_PATH)
+):
+    shutil.copy2(LEGACY_DB_PATH, DATABASE_PATH)
+    print("Database migration: existing hsl.db copied to /data/hsl.db")
+
+print(f"Database path selected: {DATABASE_PATH}")
+
 def init_db():
-  con = sqlite3.connect("hsl.db")
+  con = sqlite3.connect(DATABASE_PATH, timeout=30)
+  con.execute("PRAGMA busy_timeout = 30000")
+  con.execute("PRAGMA journal_mode = WAL")
   cur = con.cursor()
 
   cur.execute("""
@@ -174,14 +198,27 @@ def init_db():
 init_db()
 
 
+
 def db(query, params=(), fetch=False):
-  con = sqlite3.connect("hsl.db")
-  cur = con.cursor()
-  cur.execute(query, params)
-  data = cur.fetchall() if fetch else None
-  con.commit()
-  con.close()
-  return data
+    con = sqlite3.connect(DATABASE_PATH, timeout=30)
+
+    try:
+        con.execute("PRAGMA busy_timeout = 30000")
+        cur = con.cursor()
+        cur.execute(query, params)
+
+        data = cur.fetchall() if fetch else None
+        con.commit()
+        return data
+
+    except Exception:
+        con.rollback()
+        raise
+
+    finally:
+        con.close()
+
+         
 
 
 # ==========================================

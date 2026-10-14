@@ -1355,161 +1355,69 @@ def api_edit_user():
 
 
 # DISCORD WEBHOOK LOGGING
-
-# ==========================================
-# HSL-CORP LOGIN AUDIT LOGGING
-# ORIGINAL GIPHY LOGO + BRUTAL EMBED
-# ==========================================
-
-DISCORD_LOG_WEBHOOK_URL = os.environ.get(
-    "DISCORD_LOG_WEBHOOK_URL", ""
-).strip()
-
-HSL_GIPHY_URL = (
-    "https://media3.giphy.com/media/"
-    "v1.Y2lkPTc5MGI3NjExZ3RqemR3c3A0MHl3NWw1NHE4a2FjdWVkdDdqdXppaXdxdHhobGF5ayZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/"
-    "iBILBPeCHDVuELjOND/giphy.gif"
-)
-
-HSL_FOOTER_LOGO = "https://i.imgur.com/8N41A5R.png"
-
+DISCORD_LOG_WEBHOOK_URL = os.environ.get("DISCORD_LOG_WEBHOOK_URL", "").strip()
 
 def send_login_log(username, status_msg, hwid, ip_addr):
-    if not DISCORD_LOG_WEBHOOK_URL:
-        app.logger.error(
-            "LOGIN AUDIT: DISCORD_LOG_WEBHOOK_URL is missing."
-        )
+    if not DISCORD_LOG_WEBHOOK_URL or "YOUR_DISCORD" in DISCORD_LOG_WEBHOOK_URL:
         return
-
+    
+    # Live Timestamp for Discord (<t:EPOCH:F>)
     current_time = int(time.time())
-
-    # Status colors and labels
+    timestamp_str = f"<t:{current_time}:F> (<t:{current_time}:R>)"
+    
+    # Status Styles & Colors
     if status_msg == "valid":
-        color = 0x2ECC71
+        color = 0x2ECC71  # Vibrant Emerald Green
         status_badge = "🟢 `SUCCESS / AUTHENTICATED`"
-
     elif "HWID Bound" in status_msg:
-        color = 0x3498DB
+        color = 0x3498DB  # Electric Blue
         status_badge = "🔵 `NEW DEVICE BOUND`"
-
     elif status_msg == "hwid_mismatch":
-        color = 0xE67E22
+        color = 0xE67E22  # Orange Warning
         status_badge = "🟠 `HWID MISMATCH DETECTED`"
-
-    elif status_msg == "expired":
-        color = 0xF1C40F
-        status_badge = "🟡 `LICENSE EXPIRED`"
-
-    elif status_msg == "banned_attempt":
-        color = 0x992D22
-        status_badge = "🔴 `BANNED ACCOUNT ATTEMPT`"
-
-    elif status_msg == "invalid_credentials":
-        color = 0xE74C3C
-        status_badge = "🔴 `INVALID CREDENTIALS`"
-
-    elif status_msg == "tampered":
-        color = 0x8E44AD
-        status_badge = "🟣 `REQUEST TAMPERING DETECTED`"
-
     else:
-        color = 0xE74C3C
-        status_badge = (
-            f"🔴 `FAILED ({str(status_msg).upper()[:100]})`"
-        )
-
-    # Sanitize values for Discord formatting
-    safe_username = str(username or "Unknown").replace("`", "'")[:200]
-    safe_hwid = str(hwid or "Unknown").replace("`", "'")[:200]
-    safe_ip = str(ip_addr or "Unknown").replace("`", "'")[:100]
+        color = 0xE74C3C  # Crimson Red
+        status_badge = f"🔴 `FAILED ({status_msg.upper()})`"
 
     payload = {
-        "username": "HSL CORPORATION • AUTH SECURITY",
-        "avatar_url": HSL_GIPHY_URL,
-        "allowed_mentions": {"parse": []},
-        "embeds": [
-            {
-                "title": "🛡️ HSL CORPORATION • LOGIN AUDIT LOG",
-                "description": (
-                    "A new authentication request was processed "
-                    "by the core system."
-                ),
-                "color": color,
-                "fields": [
-                    {
-                        "name": "👤 User Identity",
-                        "value": f"```{safe_username}```",
-                        "inline": True
-                    },
-                    {
-                        "name": "📊 Security Status",
-                        "value": status_badge,
-                        "inline": True
-                    },
-                    {
-                        "name": "\u200b",
-                        "value": "\u200b",
-                        "inline": True
-                    },
-                    {
-                        "name": "⏰ Timestamp",
-                        "value": (
-                            f"<t:{current_time}:F> "
-                            f"(<t:{current_time}:R>)"
-                        ),
-                        "inline": False
-                    },
-                    {
-                        "name": "🌐 IP Address",
-                        "value": f"[{safe_ip}](https://ip-api.com/#'{safe_ip}')",
-                        "inline": True
-                    },
-                    {
-                        "name": "💻 Hardware ID (HWID)",
-                        "value": f"```{safe_hwid}```",
-                        "inline": False
-                    }
-                ],
-                "image": {
-                    "url": HSL_GIPHY_URL
-                },
-                "footer": {
-                    "text": (
-                        "HSL AUTH SECURITY ENGINE v2.0 "
-                        "• Confidential Audit Trail"
-                    ),
-                    "icon_url": HSL_FOOTER_LOGO
-                },
-                "timestamp": datetime.utcnow().isoformat() + "Z"
+        "username": "HSL AUTH BOT",
+        "avatar_url": "https://images-ext-1.discordapp.net/external/H9ZL2wi0olXisnxXBPBNi8GO6sQebrD5_SwF-EfuulM/https/media3.giphy.com/media/v1.Y2lkPTc5MGI3NjExZ3RqemR3c3A0MHl3NWw1NHE4a2FjdWVkdDdqdXppaXdxdHhobGF5ayZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/iBILBPeCHDVuELjOND/giphy.gif", # HSL Logo URL
+        "embeds": [{
+            "title": "🛡️ HSL CORPORATION • LOGIN AUDIT LOG",
+            "color": color,
+            "description": f"A new authentication request was processed by the core system.",
+            "fields": [
+                {"name": "👤 User Identity", "value": f"```{username}```", "inline": True},
+                {"name": "📊 Security Status", "value": status_badge, "inline": True},
+                {"name": "\u200b", "value": "\u200b", "inline": True}, # Spacing column
+                {"name": "⏰ Timestamp", "value": timestamp_str, "inline": False},
+                {"name": "🌐 IP Address", "value": f"[{ip_addr}](https://ip-api.com/#'{ip_addr}')", "inline": True},
+                {"name": "💻 Hardware ID (HWID)", "value": f"```{hwid}```", "inline": False}
+            ],
+            "footer": {
+                "text": "HSL AUTH SECURITY ENGINE v2.0 • Confidential Audit Trail",
+                "icon_url": "https://i.imgur.com/8N41A5R.png"
             }
-        ]
+        }]
     }
-
+    
     try:
-        response = requests.post(
-            DISCORD_LOG_WEBHOOK_URL,
-            json=payload,
-            timeout=8
-        )
+        requests.post(DISCORD_LOG_WEBHOOK_URL, json=payload, timeout=3)
+    except Exception as e:
+        print(f"Failed to send Discord Log: {e}")
 
-        if response.status_code not in (200, 204):
-            app.logger.error(
-                "Discord login webhook failed: HTTP %s; response=%s",
-                response.status_code,
-                response.text[:300]
-            )
-        else:
-            app.logger.info(
-                "HSL login audit sent: user=%s status=%s",
-                safe_username,
-                status_msg
-            )
 
-    except requests.RequestException:
-        app.logger.exception(
-            "Failed to send HSL-CORP login audit to Discord."
-        )
-
+def is_tool_user_expired(expires_at):
+    """Return True when an ISO expiry timestamp is at or before now."""
+    if not expires_at:
+        return False
+    try:
+        expiry = datetime.fromisoformat(str(expires_at))
+        now = datetime.now(expiry.tzinfo) if expiry.tzinfo else datetime.now()
+        return now >= expiry
+    except (TypeError, ValueError):
+        # Fail closed if a custom expiry exists but is malformed.
+        return True
 
 
 @app.route("/api/auth_login", methods=["POST"])

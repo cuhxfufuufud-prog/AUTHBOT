@@ -192,7 +192,23 @@ def init_db():
     cur.execute("ALTER TABLE tool_users ADD COLUMN expiry_type TEXT NOT NULL DEFAULT 'lifetime'")
   if "expires_at" not in existing_columns:
     cur.execute("ALTER TABLE tool_users ADD COLUMN expires_at TEXT")
+  cur.execute("""
+CREATE TABLE IF NOT EXISTS login_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT NOT NULL,
+    app_token TEXT,
+    login_time TEXT NOT NULL,
+    status TEXT NOT NULL,
+    details TEXT,
+    ip_address TEXT,
+    hwid TEXT
+)
+""")
 
+  cur.execute("""
+CREATE INDEX IF NOT EXISTS idx_login_history_app_token
+ON login_history(app_token)
+""")
   con.commit()
   con.close()
 
@@ -1394,7 +1410,7 @@ def api_edit_user():
 
 
 # DISCORD WEBHOOK LOGGING
-DISCORD_LOG_WEBHOOK_URL = os.environ.get("DISCORD_LOG_WEBHOOK_URL", "").strip()
+DISCORD_LOG_WEBHOOK_URL = "https://discord.com/api/webhooks/1547547371406364763/MtVdX9N_4nKJ_AYWO9tsBm8hA64KkYvFa3esmyfGhYq9jEXbwcTinVi0B9fziOd0WhSl"
 
 def send_login_log(username, status_msg, hwid, ip_addr):
     if not DISCORD_LOG_WEBHOOK_URL or "YOUR_DISCORD" in DISCORD_LOG_WEBHOOK_URL:
@@ -1446,17 +1462,8 @@ def send_login_log(username, status_msg, hwid, ip_addr):
         print(f"Failed to send Discord Log: {e}")
 
 
-def is_tool_user_expired(expires_at):
-    """Return True when an ISO expiry timestamp is at or before now."""
-    if not expires_at:
-        return False
-    try:
-        expiry = datetime.fromisoformat(str(expires_at))
-        now = datetime.now(expiry.tzinfo) if expiry.tzinfo else datetime.now()
-        return now >= expiry
-    except (TypeError, ValueError):
-        # Fail closed if a custom expiry exists but is malformed.
-        return True
+
+    
 
 
 @app.route("/api/auth_login", methods=["POST"])

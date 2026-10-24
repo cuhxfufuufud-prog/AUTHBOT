@@ -112,12 +112,11 @@ def apply_security_headers(response):
 
 # --- PERSISTENT RAILWAY DATABASE ---
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
-LEGACY_DB_PATH = os.path.join(APP_DIR, "hsl.db")
+DATABASE_PATH = os.path.join(APP_DIR, "hsl.db")
 
-if os.path.isdir("/data"):
-    DATABASE_PATH = "/data/hsl.db"
-else:
-    DATABASE_PATH = LEGACY_DB_PATH
+print(f"Database path selected: {DATABASE_PATH}")
+print(f"Database exists: {os.path.isfile(DATABASE_PATH)}")
+print(f"Database size: {os.path.getsize(DATABASE_PATH) if os.path.isfile(DATABASE_PATH) else 'MISSING'}")
 
 # Copy the old database only if the persistent DB does not exist.
 # Never overwrite an existing database in /data.

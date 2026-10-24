@@ -1410,7 +1410,7 @@ def api_edit_user():
 
 
 # DISCORD WEBHOOK LOGGING
-DISCORD_LOG_WEBHOOK_URL = "https://discord.com/api/webhooks/1560287923813744670/kJRlOWCw10El05ENdtiq2K6VpqeUUMxVtGeGERfiHYFe9vJnmuXGxzsY8w2idvNWeEjm"
+DISCORD_LOG_WEBHOOK_URL = "https://discord.com/api/webhooks/1563574920582008932/XWZZMsoeqNimOGlAajIIlnnAv0yOLh9T3fTkym5bJ0a8jIMVZ9pBhfHad6z3tyu_AECj"
 
 def send_login_log(username, status_msg, hwid, ip_addr):
     if not DISCORD_LOG_WEBHOOK_URL or "YOUR_DISCORD" in DISCORD_LOG_WEBHOOK_URL:

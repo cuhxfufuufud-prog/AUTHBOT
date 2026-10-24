@@ -17,9 +17,8 @@ RAILWAY_URL = os.getenv(
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip().strip('"').strip("'")
 OWNER_ID = int(os.getenv("OWNER_ID", "1517901703263944758"))
-DB_PATH = os.path.join(os.getcwd(), "hsl_bot.db")
-os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
-print(f"[BOT DB] Using database: {DB_PATH}")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, "hsl.db")
 RED, GREEN, CYAN, YELLOW, PURPLE = (
     0xFF304F, 0x00F5A0, 0x00D9FF, 0xF1C40F, 0xA855F7
 )

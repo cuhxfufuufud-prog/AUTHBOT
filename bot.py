@@ -17,8 +17,7 @@ RAILWAY_URL = os.getenv(
 
 BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip().strip('"').strip("'")
 OWNER_ID = int(os.getenv("OWNER_ID", "1517901703263944758"))
-DB_PATH = os.getenv("BOT_DB_PATH", "hsl.db")
-
+DB_PATH = os.getenv("BOT_DB_PATH", "/tmp/hsl_bot.db")
 RED, GREEN, CYAN, YELLOW, PURPLE = (
     0xFF304F, 0x00F5A0, 0x00D9FF, 0xF1C40F, 0xA855F7
 )

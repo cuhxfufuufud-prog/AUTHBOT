@@ -1312,7 +1312,7 @@ async def notify_login(
     )
     e.add_field(
         name="IP",
-        value=`{clean(ip_address, 100)}`,
+       value=f"{clean(ip_address, 100)}",
         inline=True
     )
     e.add_field(

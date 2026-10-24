@@ -1,4 +1,3 @@
-
 import os
 import asyncio
 import sqlite3
@@ -85,7 +84,7 @@ def make_embed(title, description, color=CYAN):
         timestamp=datetime.datetime.now(datetime.timezone.utc)
     )
     e.set_author(name="HSL-CORP • AUTH SECURITY")
-    e.set_footer(text="HSL-CORP // SECURE CONTROL INTERFACE")
+    e.set_footer(text="HSL Auth // Secure Control Interface")
 
     if bot.user:
         e.set_thumbnail(url=bot.user.display_avatar.url)
@@ -584,7 +583,6 @@ class CreateAppSelect(discord.ui.Select):
         )
 
     async def callback(self, interaction: discord.Interaction):
-        # Other members can see the menu, but cannot use it.
         if interaction.user.id != self.owner_id:
             return await interaction.response.send_message(
                 embed=make_embed(
@@ -597,8 +595,22 @@ class CreateAppSelect(discord.ui.Select):
 
         app_token = self.values[0]
 
-        # API result and login credentials remain private.
-        await interaction.response.defer(ephemeral=True, thinking=True)
+        # ⚡ Stylish Loading Simulation Bar like your screenshot
+        await interaction.response.edit_message(
+            embed=make_embed(
+                "⚡ PROVISIONING CLIENT ACCOUNT..",
+                "```ansi\n"
+                "\x1b[1;36m🔄 Creating Zero-Leak Credentials...\x1b[0m\n"
+                "```\n"
+                f"**Username:** `{clean(self.username)}`\n"
+                f"**Duration:** `{self.days if self.expiry_type == 'custom' else 'Lifetime'}`\n\n"
+                "`[ ⬛⬛⬛⬛⬛⬛⬛⬜⬜⬜ ] 70% • Hashing Passwords & Preparing HWID`\n"
+                "Lock...",
+                CYAN
+            ),
+            view=None
+        )
+        await asyncio.sleep(1.2)
 
         payload = {
             "username": self.username,
@@ -642,7 +654,6 @@ class CreateAppSelect(discord.ui.Select):
                     else f"{self.days} day(s)"
                 )
 
-                # Only publish a key if the API actually returns one.
                 generated_key = (
                     data.get("key")
                     or data.get("license_key")
@@ -650,30 +661,28 @@ class CreateAppSelect(discord.ui.Select):
                 )
 
                 public_description = (
-                    f"**Application:** `{clean(app_name)}`\n"
-                    f"**Username:** `{clean(self.username)}`\n"
-                    f"**Expiry:** `{expiry}`\n"
-                    f"**Status:** `SUCCESS`"
+                    f"✅ **User** `{clean(self.username)}` **Created for HSL AUTH**\n\n"
+                    f"» **Password:** `{clean(self.password)}`\n"
+                    f"» **Subscription:** `default`\n"
+                    f"» **Expires:** `{datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=self.days if self.expiry_type == 'custom' else 365)}`\n"
+                    f"» **HWID Binding:** `Locks on 1st Login` ⚡"
                 )
 
                 if generated_key:
                     public_description += (
-                        f"\n**Generated Key:** "
+                        f"\n» **Generated Key:** "
                         f"`{clean(generated_key, 150)}`"
                     )
 
                 public_embed = make_embed(
-                    "🟢 LICENSE CREATED",
-                    public_description
-                    + "\n\nThe license creation request succeeded.",
-                    GREEN
+                    "🔴 CLIENT ACCOUNT CREATED",
+                    public_description,
+                    RED
                 )
 
-                # Public confirmation in the same channel as /create.
                 if interaction.channel is not None:
                     await interaction.channel.send(embed=public_embed)
 
-                # Credentials only visible to the command invoker.
                 private_embed = make_embed(
                     "🔐 PRIVATE LOGIN DETAILS",
                     f"**Application:** `{clean(app_name)}`\n"
@@ -687,21 +696,6 @@ class CreateAppSelect(discord.ui.Select):
                     embed=private_embed,
                     ephemeral=True
                 )
-
-                # Remove the dropdown after a successful request.
-                if interaction.message:
-                    try:
-                        await interaction.message.edit(
-                            embed=make_embed(
-                                "✅ REQUEST COMPLETED",
-                                "The license request was processed. "
-                                "See the channel for its public confirmation.",
-                                GREEN
-                            ),
-                            view=None
-                        )
-                    except discord.HTTPException:
-                        pass
 
                 await audit(
                     f"**License created**\n"
@@ -722,19 +716,6 @@ class CreateAppSelect(discord.ui.Select):
                     ),
                     ephemeral=True
                 )
-
-                if interaction.message:
-                    try:
-                        await interaction.message.edit(
-                            embed=make_embed(
-                                "🔴 REQUEST FAILED",
-                                "The error was sent privately.",
-                                RED
-                            ),
-                            view=None
-                        )
-                    except discord.HTTPException:
-                        pass
 
         except Exception as exc:
             await interaction.followup.send(
@@ -970,14 +951,15 @@ async def create(
         else f"{days} day(s)"
     )
 
-    # Public dropdown; do not publish password or login credentials.
     await interaction.response.send_message(
         embed=make_embed(
-            "⚡ LICENSE PROVISIONING",
-            f"**Requested by:** {interaction.user.mention}\n"
-            f"**Expiry:** `{expiry}`\n\n"
-            "👇 **STEP 1 — SELECT APPLICATION**\n"
-            "Only the person who opened this menu can use it.",
+            "⚡ HSL AUTH Provisioning System",
+            f"**Account Details Prepared:**\n\n"
+            f"» **Username:** `{clean(username)}`\n"
+            f"» **Password:** `{clean(password)}`\n"
+            f"» **Duration:** `{expiry}`\n\n"
+            "_____________________________________\n\n"
+            "*Select target Application from the dropdown below to create account:* ⚡",
             CYAN
         ),
         view=view,
@@ -1048,7 +1030,7 @@ async def reset_hwid(interaction: discord.Interaction):
 
 
 # =========================================================
-# AUDIT & WHITELIST COMMANDS
+# AUDIT & WHITELIST COMMANDS (INTACT)
 # =========================================================
 @bot.tree.command(
     name="set_log_channel",
@@ -1330,7 +1312,7 @@ async def notify_login(
     )
     e.add_field(
         name="IP",
-        value=f"`{clean(ip_address, 100)}`",
+        value=`{clean(ip_address, 100)}`,
         inline=True
     )
     e.add_field(

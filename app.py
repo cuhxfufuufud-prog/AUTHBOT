@@ -18,7 +18,9 @@ from flask import (
     render_template_string,
     request,
     session,
+    send_file,
 )
+import secrets
 from werkzeug.middleware.proxy_fix import ProxyFix
 
 # ==========================================
@@ -1598,6 +1600,51 @@ def logout():
 # ==========================================
 # SERVER RUNNER
 # ==========================================
+
+# TEMPORARY PROTECTED DATABASE BACKUP DOWNLOAD
+@app.route("/__temporary_db_backup", methods=["GET", "POST"])
+def temporary_db_backup():
+    expected_token = os.environ.get("DB_BACKUP_TOKEN", "")
+
+    # Route remains disabled unless a token is configured.
+    if len(expected_token) < 32:
+        return "Backup route disabled", 404
+
+    if request.method == "GET":
+        return """
+        <!doctype html>
+        <html>
+        <head><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+        <body style="font-family:Arial;max-width:420px;margin:60px auto;padding:20px">
+          <h2>HSL-CORP Database Backup</h2>
+          <form method="POST">
+            <label>Backup access token</label><br><br>
+            <input type="password" name="token" required
+                   autocomplete="current-password"
+                   style="width:100%;padding:12px;box-sizing:border-box">
+            <br><br>
+            <button type="submit" style="padding:12px">Download Backup</button>
+          </form>
+        </body>
+        </html>
+        """
+
+    supplied_token = request.form.get("token", "")
+
+    if not secrets.compare_digest(supplied_token, expected_token):
+        return "Unauthorized", 401
+
+    backup_path = "/data/hsl_backup.db"
+
+    if not os.path.isfile(backup_path):
+        return "Backup file not found", 404
+
+    return send_file(
+        backup_path,
+        as_attachment=True,
+        download_name="hsl_backup.db",
+        mimetype="application/octet-stream",
+    )
 
 if __name__ == "__main__":
   app.run(host="0.0.0.0", port=5000, debug=False)

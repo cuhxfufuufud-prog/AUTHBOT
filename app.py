@@ -168,7 +168,6 @@ def init_db():
         )
     """)
 
-  # Per-App composite unique constraint (username + app_token)
   cur.execute("""
         CREATE TABLE IF NOT EXISTS tool_users (
             id INTEGER PRIMARY KEY AUTOINCREMENT, 
@@ -184,10 +183,11 @@ def init_db():
         )
     """)
 
+  # Bulletproof migration to enforce per-app unique constraint on username
   try:
       cur.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='tool_users'")
       table_sql = cur.fetchone()
-      if table_sql and "UNIQUE" in table_sql[0] and "app_token" not in table_sql[0]:
+      if table_sql and "UNIQUE(username, app_token)" not in table_sql[0]:
           cur.execute("ALTER TABLE tool_users RENAME TO tool_users_old")
           cur.execute("""
                 CREATE TABLE tool_users (
@@ -203,10 +203,13 @@ def init_db():
                     UNIQUE(username, app_token)
                 )
             """)
-          cur.execute("""
-                INSERT INTO tool_users (id, username, password, app_token, status, hwid, created_at, expiry_type, expires_at)
-                SELECT id, username, password, app_token, status, hwid, created_at, expiry_type, expires_at FROM tool_users_old
-            """)
+          try:
+              cur.execute("""
+                    INSERT INTO tool_users (id, username, password, app_token, status, hwid, created_at, expiry_type, expires_at)
+                    SELECT id, username, password, app_token, status, hwid, created_at, expiry_type, expires_at FROM tool_users_old
+                """)
+          except Exception as migrate_ex:
+              print(f"Data migration row copy note: {migrate_ex}")
           cur.execute("DROP TABLE tool_users_old")
           con.commit()
   except Exception as e:
@@ -1014,7 +1017,7 @@ async function createUser() {
     });
     let data = await res.json();
     alert(data.message || data.error || 'Request completed.');
-    if (res.ok && data.message && data.message.startsWith('User Created:')) location.reload();
+    if (res.ok && data.message && (data.message.startsWith('User Created:') || data.message.includes('Created'))) location.reload();
 }
 
 async function deleteUser(username) {

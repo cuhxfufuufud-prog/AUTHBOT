@@ -252,19 +252,18 @@ class AppActionSelect(discord.ui.Select):
         app_rows = [row for row in get_apps() if row[1] == app_token]
         app_name = app_rows[0][0] if app_rows else "Selected application"
 
-        await interaction.response.defer(thinking=True)
-
         try:
             users = await get_app_users(app_token)
         except Exception as exc:
-            return await interaction.followup.send(
+            return await interaction.response.edit_message(
                 embed=make_embed(
                     "🔴 APP USERS API ERROR",
                     f"{clean(exc, 1200)}\n\n"
                     "**Note:** `/api/bot/users` must support "
                     "`app_token` filtering in `app.py`.",
                     RED
-                )
+                ),
+                view=None
             )
 
         if self.action == "list":
@@ -281,7 +280,7 @@ class AppActionSelect(discord.ui.Select):
                     f"HWID `{clean(hwid[:12])}`"
                 )
 
-            return await interaction.followup.send(
+            return await interaction.response.edit_message(
                 embed=make_embed(
                     f"👥 {clean(app_name)} • USERS ({len(users)})",
                     "\n".join(lines)[:3900]
@@ -289,21 +288,24 @@ class AppActionSelect(discord.ui.Select):
                     CYAN,
                     interaction.user,
                     "list"
-                )
+                ),
+                view=None
             )
 
         if not users:
-            return await interaction.followup.send(
+            return await interaction.response.edit_message(
                 embed=make_embed(
                     "📭 NO USERS",
                     f"No accounts returned for **{clean(app_name)}**.",
                     YELLOW,
                     interaction.user,
                     self.action
-                )
+                ),
+                view=None
             )
 
-        await interaction.followup.send(
+        # Update the original Step 1 message into Step 2 menu directly! (Purana Select Menu gayab)
+        await interaction.response.edit_message(
             embed=make_embed(
                 f"⚡ {self.action.upper()} • {clean(app_name)}",
                 f"**Application:** `{clean(app_name)}`\n"
@@ -443,7 +445,14 @@ class ConfirmActionView(discord.ui.View):
     async def confirm(self, interaction: discord.Interaction, button):
         action_title = self.action.upper()
         
-        # Smooth Animated Progress steps (10% -> 40% -> 70% -> 100%)
+        paths = {
+            "ban": "/api/bot/toggle_ban",
+            "unban": "/api/bot/toggle_ban",
+            "delete": "/api/bot/delete_user",
+            "resethwid": "/api/bot/reset_hwid"
+        }
+
+        # Progress bar animation (10% -> 40% -> 70% -> 100%)
         stages = [
             ("`[ █░░░░░░░░░ ] 10% • Initializing Secure Handshake`", 0.4),
             ("`[ ████░░░░░░ ] 40% • Dispatching API Payload`", 0.4),
@@ -451,8 +460,27 @@ class ConfirmActionView(discord.ui.View):
             ("`[ ██████████ ] 100% • Finalizing Protocol`", 0.3)
         ]
 
-        for bar_text, delay in stages:
-            await interaction.response.edit_message(
+        # First stage edit
+        await interaction.response.edit_message(
+            embed=make_embed(
+                f"⚡ PROCESSING {action_title}...",
+                "```ansi\n"
+                f"\x1b[1;36m🔄 Executing {action_title} Protocol...\x1b[0m\n"
+                "```\n"
+                f"» **Target User:** `{clean(self.username)}`\n"
+                f"» **App:** `{clean(self.app_name)}`\n\n"
+                f"{stages[0][0]}",
+                CYAN,
+                interaction.user,
+                self.action
+            ),
+            view=None
+        )
+        await asyncio.sleep(stages[0][1])
+
+        # Remaining loading animation stages
+        for bar_text, delay in stages[1:]:
+            await interaction.edit_original_response(
                 embed=make_embed(
                     f"⚡ PROCESSING {action_title}...",
                     "```ansi\n"
@@ -464,17 +492,9 @@ class ConfirmActionView(discord.ui.View):
                     CYAN,
                     interaction.user,
                     self.action
-                ),
-                view=None
+                )
             )
             await asyncio.sleep(delay)
-
-        paths = {
-            "ban": "/api/bot/toggle_ban",
-            "unban": "/api/bot/toggle_ban",
-            "delete": "/api/bot/delete_user",
-            "resethwid": "/api/bot/reset_hwid"
-        }
 
         try:
             if self.action in ("ban", "unban"):
@@ -648,7 +668,6 @@ class CreateAppSelect(discord.ui.Select):
 
         app_token = self.values[0]
 
-        # Smooth Loading animation stages with 10%, 40%, 70%, 100% progression
         create_stages = [
             ("`[ █░░░░░░░░░ ] 10% • Initializing Secure Handshake`", 0.4),
             ("`[ ████░░░░░░ ] 40% • Hashing Passwords & Preparing HWID`", 0.4),
@@ -656,8 +675,27 @@ class CreateAppSelect(discord.ui.Select):
             ("`[ ██████████ ] 100% • Provisioning Complete`", 0.3)
         ]
 
-        for bar_text, delay in create_stages:
-            await interaction.response.edit_message(
+        # Edit original message to remove dropdown menu immediately
+        await interaction.response.edit_message(
+            embed=make_embed(
+                "⚡ PROVISIONING CLIENT ACCOUNT..",
+                "```ansi\n"
+                "\x1b[1;36m🔄 Creating Zero-Leak Credentials...\x1b[0m\n"
+                "```\n"
+                f"» **Username:** `{clean(self.username)}`\n"
+                f"» **Target App:** `HSL AUTH SYSTEM`\n"
+                f"» **Duration:** `{self.days if self.expiry_type == 'custom' else 'Lifetime'} Days`\n\n"
+                f"{create_stages[0][0]}",
+                CYAN,
+                interaction.user,
+                "adduser"
+            ),
+            view=None
+        )
+        await asyncio.sleep(create_stages[0][1])
+
+        for bar_text, delay in create_stages[1:]:
+            await interaction.edit_original_response(
                 embed=make_embed(
                     "⚡ PROVISIONING CLIENT ACCOUNT..",
                     "```ansi\n"
@@ -670,8 +708,7 @@ class CreateAppSelect(discord.ui.Select):
                     CYAN,
                     interaction.user,
                     "adduser"
-                ),
-                view=None
+                )
             )
             await asyncio.sleep(delay)
 
@@ -827,7 +864,7 @@ async def on_ready():
         print(f"[HSL-CORP] Command sync failed: {exc}")
 
 
-@bot.tree.command(name="ping", description="Check HSL-CORP bot latency")
+@bot.tree.command(name="ping", description="🏓 Check HSL-CORP bot latency")
 async def ping(interaction: discord.Interaction):
     await interaction.response.send_message(
         embed=make_embed(
@@ -841,7 +878,7 @@ async def ping(interaction: discord.Interaction):
     )
 
 
-@bot.tree.command(name="help", description="HSL-CORP command panel")
+@bot.tree.command(name="help", description="⚡ HSL-CORP command panel")
 async def help_command(interaction: discord.Interaction):
     await interaction.response.send_message(
         embed=make_embed(
@@ -865,7 +902,7 @@ async def help_command(interaction: discord.Interaction):
 
 @bot.tree.command(
     name="add_app",
-    description="Register an app for the app dropdown"
+    description="➕ Register an app for the app dropdown"
 )
 async def add_app(
     interaction: discord.Interaction,
@@ -928,7 +965,7 @@ async def add_app(
     )
 
 
-@bot.tree.command(name="apps", description="List apps registered in this bot")
+@bot.tree.command(name="apps", description="📦 List apps registered in this bot")
 async def apps_command(interaction: discord.Interaction):
     if await deny(interaction, "apps"):
         return
@@ -953,7 +990,7 @@ async def apps_command(interaction: discord.Interaction):
 
 @bot.tree.command(
     name="create",
-    description="Create a license after selecting an app"
+    description="🚀 Create a license after selecting an app"
 )
 @app_commands.choices(
     expiry_type=[
@@ -1086,30 +1123,30 @@ async def show_app_action(interaction, action):
 
 @bot.tree.command(
     name="list",
-    description="List users in a selected application"
+    description="📜 List users in a selected application"
 )
 async def list_users(interaction: discord.Interaction):
     await show_app_action(interaction, "list")
 
 
-@bot.tree.command(name="ban", description="Select app then user to ban")
+@bot.tree.command(name="ban", description="🔨 Select app then user to ban")
 async def ban(interaction: discord.Interaction):
     await show_app_action(interaction, "ban")
 
 
-@bot.tree.command(name="unban", description="Select app then user to unban")
+@bot.tree.command(name="unban", description="🔓 Select app then user to unban")
 async def unban(interaction: discord.Interaction):
     await show_app_action(interaction, "unban")
 
 
-@bot.tree.command(name="delete", description="Select app then user to delete")
+@bot.tree.command(name="delete", description="🗑️ Select app then user to delete")
 async def delete_user(interaction: discord.Interaction):
     await show_app_action(interaction, "delete")
 
 
 @bot.tree.command(
     name="resethwid",
-    description="Select app then user to reset HWID"
+    description="🔄 Select app then user to reset HWID"
 )
 async def reset_hwid(interaction: discord.Interaction):
     await show_app_action(interaction, "resethwid")
@@ -1120,7 +1157,7 @@ async def reset_hwid(interaction: discord.Interaction):
 # =========================================================
 @bot.tree.command(
     name="set_log_channel",
-    description="Set HSL-CORP audit channel"
+    description="📋 Set HSL-CORP audit channel"
 )
 async def set_log_channel(
     interaction: discord.Interaction,
@@ -1148,7 +1185,7 @@ async def set_log_channel(
 
 @bot.tree.command(
     name="whitelist_add",
-    description="Grant access to one command"
+    description="🛡️ Grant access to one command"
 )
 async def whitelist_add(
     interaction: discord.Interaction,
@@ -1189,7 +1226,7 @@ async def whitelist_add(
 
 @bot.tree.command(
     name="whitelist_remove",
-    description="Remove access to one command"
+    description="❌ Remove access to one command"
 )
 async def whitelist_remove(
     interaction: discord.Interaction,
@@ -1229,7 +1266,7 @@ async def whitelist_remove(
 
 @bot.tree.command(
     name="whitelist_list",
-    description="Show whitelist entries"
+    description="📑 Show whitelist entries"
 )
 async def whitelist_list(interaction: discord.Interaction):
     if await deny(interaction, "whitelist_list"):
@@ -1261,7 +1298,7 @@ async def whitelist_list(interaction: discord.Interaction):
 # =========================================================
 @bot.tree.command(
     name="update_gmail",
-    description="Update a license account Gmail"
+    description="📧 Update a license account Gmail"
 )
 async def update_gmail(
     interaction: discord.Interaction,
@@ -1346,7 +1383,7 @@ async def update_gmail(
 # =========================================================
 @bot.tree.command(
     name="notify_login",
-    description="Send a manual login audit notification"
+    description="🔔 Send a manual login audit notification"
 )
 @app_commands.choices(
     status=[

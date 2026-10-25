@@ -23,8 +23,10 @@ RED, GREEN, CYAN, YELLOW, PURPLE = (
     0xFF304F, 0x00F5A0, 0x00D9FF, 0xF1C40F, 0xA855F7
 )
 
-# Dropdown menu ke liye red sticker asset link
-RED_EMOJI = "<a:red_emoji:1528079861283946538>"
+# Custom Animated Emojis & Stickers Links Provided by You
+TICK_EMOJI = "<a:tick:1441097547350282260>"
+RED_EMOJI = "<a:red:1528079861283946538>"
+RESET_EMOJI = "<a:reset:1441087243996496079>"
 PIKACHU_URL = "https://cdn.discordapp.com/emojis/1320787117881823252.webp?size=44&animated=true"
 
 intents = discord.Intents.default()
@@ -250,7 +252,7 @@ class AppActionSelect(discord.ui.Select):
         )
 
     async def callback(self, interaction: discord.Interaction):
-        if interaction.user.id != self.owner_id:
+        if interaction.user.id != self.owner_id and not is_allowed(interaction.user.id, self.action):
             return await interaction.response.send_message(
                 "❌ You don't have permission to use this menu.",
                 ephemeral=True
@@ -433,7 +435,7 @@ class UserSelect(discord.ui.Select):
         )
 
     async def callback(self, interaction: discord.Interaction):
-        if interaction.user.id != self.owner_id:
+        if interaction.user.id != self.owner_id and not is_allowed(interaction.user.id, self.action):
             return await interaction.response.send_message(
                 "❌ You don't have permission to use this menu.",
                 ephemeral=True
@@ -481,7 +483,7 @@ class ConfirmActionView(discord.ui.View):
         self.username = username
 
     async def interaction_check(self, interaction):
-        if interaction.user.id != self.owner_id:
+        if interaction.user.id != self.owner_id and not is_allowed(interaction.user.id, self.action):
             await interaction.response.send_message("❌ You don't have permission.", ephemeral=True)
             return False
         return True
@@ -609,7 +611,7 @@ class CreateAppSelect(discord.ui.Select):
         super().__init__(placeholder="📦 STEP 1 — SELECT APPLICATION", min_values=1, max_values=1, options=options)
 
     async def callback(self, interaction: discord.Interaction):
-        if interaction.user.id != self.owner_id:
+        if interaction.user.id != self.owner_id and not is_allowed(interaction.user.id, "create"):
             return await interaction.response.send_message("❌ Unauthorized.", ephemeral=True)
 
         app_token = self.values[0]
@@ -725,7 +727,7 @@ async def help_command(interaction: discord.Interaction):
     await interaction.response.send_message(
         embed=make_embed(
             "HSL-CORP • CONTROL PANEL",
-            "**USER ACTIONS**\n`/create` `/list` `/ban` `/unban` `/deluser` `/resethwid`\n\n**APP MANAGEMENT**\n`/add_app` `/apps` `/delete_app`",
+            "**USER ACTIONS**\n`/create` `/list` `/ban` `/unban` `/deluser` `/resethwid`\n\n**APP MANAGEMENT**\n`/add_app` `/apps` `/delete_app`\n\n**WHITELIST ADMIN**\n`/whitelist` `/unwhitelist` `/whitelist_info`",
             RED,
             interaction.user,
             "help"
@@ -733,6 +735,48 @@ async def help_command(interaction: discord.Interaction):
     )
 
 
+# =========================================================
+# WHITELIST MANAGEMENT COMMANDS
+# =========================================================
+@bot.tree.command(name="whitelist", description="👑 Grant permission to a user for a bot command")
+async def whitelist_cmd(interaction: discord.Interaction, user: discord.User, command: str):
+    if interaction.user.id != OWNER_ID:
+        return await interaction.response.send_message(embed=make_embed("⛔ OWNER ONLY", "Only owner can manage whitelist.", RED, interaction.user, "whitelist"), ephemeral=True)
+    
+    cmd_clean = command.strip().lower().replace("/", "")
+    db("INSERT OR IGNORE INTO discord_whitelist (user_id, command) VALUES (?, ?)", (str(user.id), cmd_clean))
+    await interaction.response.send_message(embed=make_embed("👑 USER WHITELISTED", f"User {user.mention} is now authorized to use `/{cmd_clean}`", GREEN, interaction.user, "whitelist"))
+
+
+@bot.tree.command(name="unwhitelist", description="❌ Revoke command permission from a user")
+async def unwhitelist_cmd(interaction: discord.Interaction, user: discord.User, command: str):
+    if interaction.user.id != OWNER_ID:
+        return await interaction.response.send_message(embed=make_embed("⛔ OWNER ONLY", "Only owner can manage whitelist.", RED, interaction.user, "unwhitelist"), ephemeral=True)
+    
+    cmd_clean = command.strip().lower().replace("/", "")
+    db("DELETE FROM discord_whitelist WHERE user_id=? AND command=?", (str(user.id), cmd_clean))
+    await interaction.response.send_message(embed=make_embed("❌ WHITELIST REVOKED", f"Revoked permission for `/{cmd_clean}` from {user.mention}", RED, interaction.user, "unwhitelist"))
+
+
+@bot.tree.command(name="whitelist_info", description="📜 View all whitelisted users & permissions")
+async def whitelist_info_cmd(interaction: discord.Interaction):
+    if interaction.user.id != OWNER_ID:
+        return await interaction.response.send_message(embed=make_embed("⛔ OWNER ONLY", "Only owner can view whitelist info.", RED, interaction.user, "whitelist_info"), ephemeral=True)
+    
+    rows = db("SELECT user_id, command FROM discord_whitelist", fetch=True)
+    if not rows:
+        return await interaction.response.send_message(embed=make_embed("📜 WHITELIST INFO", "No users currently whitelisted.", YELLOW, interaction.user, "whitelist_info"))
+    
+    lines = []
+    for uid, cmd in rows:
+        lines.append(f"• <@{uid}> (`{uid}`) ➔ `/{cmd}`")
+    
+    await interaction.response.send_message(embed=make_embed(f"📜 WHITELISTED USERS ({len(rows)})", "\n".join(lines)[:3900], CYAN, interaction.user, "whitelist_info"))
+
+
+# =========================================================
+# BOT FUNCTIONAL COMMANDS
+# =========================================================
 @bot.tree.command(name="add_app", description="➕ Register an app for the app dropdown")
 async def add_app(interaction: discord.Interaction, app_name: str, app_token: str):
     if interaction.user.id != OWNER_ID:
@@ -771,11 +815,11 @@ async def create(interaction: discord.Interaction, username: str, password: str,
     if await deny(interaction, "create"): return
     apps = get_apps()
     if not apps:
-        return await interaction.response.send_message(embed=make_embed("📦 NO APPS", "Register an app first.", YELLOW, interaction.user, "adduser"), ephemeral=True)
+        return await interaction.response.send_message(embed=make_embed("📦 NO APPS", "Register an app first.", YELLOW, interaction.user, "create"), ephemeral=True)
     
     view = CreateAppView(interaction.user.id, username.strip(), password.strip(), expiry_type.value, days, apps)
     await interaction.response.send_message(
-        embed=make_embed("HSL Auth Provisioning System", f"**Username:** `{clean(username)}`\n*Select target Application below:*", CYAN, interaction.user, "adduser"),
+        embed=make_embed("HSL Auth Provisioning System", f"**Username:** `{clean(username)}`\n*Select target Application below:*", CYAN, interaction.user, "create"),
         view=view
     )
 

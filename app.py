@@ -170,19 +170,50 @@ def init_db():
         )
     """)
 
+  # Updated tool_users table with per-app composite unique constraint (username + app_token)
   cur.execute("""
         CREATE TABLE IF NOT EXISTS tool_users (
             id INTEGER PRIMARY KEY AUTOINCREMENT, 
-            username TEXT UNIQUE, 
+            username TEXT, 
             password TEXT, 
             app_token TEXT, 
             status TEXT, 
             hwid TEXT, 
             created_at TEXT,
             expiry_type TEXT NOT NULL DEFAULT 'lifetime',
-            expires_at TEXT
+            expires_at TEXT,
+            UNIQUE(username, app_token)
         )
     """)
+
+  # Safe migration check if existing table had global unique username constraint
+  try:
+      cur.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='tool_users'")
+      table_sql = cur.fetchone()
+      if table_sql and "UNIQUE" in table_sql[0] and "app_token" not in table_sql[0]:
+          cur.execute("ALTER TABLE tool_users RENAME TO tool_users_old")
+          cur.execute("""
+                CREATE TABLE tool_users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT, 
+                    username TEXT, 
+                    password TEXT, 
+                    app_token TEXT, 
+                    status TEXT, 
+                    hwid TEXT, 
+                    created_at TEXT,
+                    expiry_type TEXT NOT NULL DEFAULT 'lifetime',
+                    expires_at TEXT,
+                    UNIQUE(username, app_token)
+                )
+            """)
+          cur.execute("""
+                INSERT INTO tool_users (id, username, password, app_token, status, hwid, created_at, expiry_type, expires_at)
+                SELECT id, username, password, app_token, status, hwid, created_at, expiry_type, expires_at FROM tool_users_old
+            """)
+          cur.execute("DROP TABLE tool_users_old")
+          con.commit()
+  except Exception as e:
+      print(f"Migration note for tool_users: {e}")
 
   cur.execute("PRAGMA table_info(tool_users)")
   existing_columns = {row[1] for row in cur.fetchall()}
@@ -1333,7 +1364,7 @@ def api_create_user():
       return jsonify({"message": f"User Created: {username} (Lifetime)"}), 200
     return jsonify({"message": f"User Created: {username} (expires in {days} days)"}), 200
   except sqlite3.IntegrityError:
-    return jsonify({"message": "Username already exists!"}), 409
+    return jsonify({"message": "Username already exists in this application!"}), 409
   except Exception as exc:
     app.logger.exception("Could not create tool user")
     return jsonify({"message": "Could not create user due to a server error."}), 500
@@ -1495,7 +1526,7 @@ def api_auth_login():
         return jsonify({"status": "banned", "message": "Account suspended"})
 
     if not user_row[5]:
-        db("UPDATE tool_users SET hwid=?, status='active' WHERE username=?", (hwid, username))
+        db("UPDATE tool_users SET hwid=?, status='active' WHERE username=? AND app_token=?", (hwid, username, token))
         send_login_log(username, "valid (HWID Bound)", hwid, client_ip)
         return jsonify({"status": "valid", "message": "HWID Bound Successfully"})
     else:

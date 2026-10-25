@@ -76,15 +76,19 @@ init_db()
 # =========================================================
 # HELPERS
 # =========================================================
-def make_embed(title, description, color=CYAN):
+def make_embed(title, description, color=CYAN, member=None, command_name=None):
     e = discord.Embed(
         title=title,
         description=description,
         color=color,
         timestamp=datetime.datetime.now(datetime.timezone.utc)
     )
-    e.set_author(name="HSL Auth • Created by @hsl")
-    e.set_footer(text="HSL Auth // Secure Control Interface")
+    if member and command_name:
+        e.set_author(name=f"{member.display_name} used #{command_name}", icon_url=member.display_avatar.url)
+    else:
+        e.set_author(name="HSL Auth • Created by JATIN")
+        
+    e.set_footer(text="HSL Auth • Created by JATIN")
 
     if bot.user:
         e.set_thumbnail(url=bot.user.display_avatar.url)
@@ -282,7 +286,9 @@ class AppActionSelect(discord.ui.Select):
                     f"👥 {clean(app_name)} • USERS ({len(users)})",
                     "\n".join(lines)[:3900]
                     or "No users returned for this app.",
-                    CYAN
+                    CYAN,
+                    interaction.user,
+                    "list"
                 ),
                 ephemeral=True
             )
@@ -292,7 +298,9 @@ class AppActionSelect(discord.ui.Select):
                 embed=make_embed(
                     "📭 NO USERS",
                     f"No accounts returned for **{clean(app_name)}**.",
-                    YELLOW
+                    YELLOW,
+                    interaction.user,
+                    self.action
                 ),
                 ephemeral=True
             )
@@ -303,7 +311,9 @@ class AppActionSelect(discord.ui.Select):
                 f"**Application:** `{clean(app_name)}`\n"
                 f"**Users:** `{len(users)}`\n\n"
                 "👇 **STEP 2 — Select a username.**",
-                RED if self.action in ("ban", "delete") else CYAN
+                RED if self.action in ("ban", "delete") else CYAN,
+                interaction.user,
+                self.action
             ),
             view=UserSelectView(
                 self.owner_id,
@@ -385,7 +395,9 @@ class UserSelect(discord.ui.Select):
                 f"**Action:** `{self.action.upper()}`\n"
                 f"**Username:** `{clean(username)}`\n\n"
                 "Confirm only if the app and username are correct.",
-                RED
+                RED,
+                interaction.user,
+                self.action
             ),
             view=ConfirmActionView(
                 self.owner_id,
@@ -431,8 +443,9 @@ class ConfirmActionView(discord.ui.View):
         style=discord.ButtonStyle.danger
     )
     async def confirm(self, interaction: discord.Interaction, button):
-        # ⚡ Stylish Loading Simulation Bar for Actions (Delete, Ban, etc.)
         action_title = self.action.upper()
+        
+        # Show loading animation in place
         await interaction.response.edit_message(
             embed=make_embed(
                 f"⚡ PROCESSING {action_title}...",
@@ -442,11 +455,13 @@ class ConfirmActionView(discord.ui.View):
                 f"» **Target User:** `{clean(self.username)}`\n"
                 f"» **App:** `{clean(self.app_name)}`\n\n"
                 "`[ ⬛⬛⬛⬛⬛⬛⬛⬜⬜⬜ ] 70% • Secure API Dispatch`",
-                CYAN
+                CYAN,
+                interaction.user,
+                self.action
             ),
             view=None
         )
-        await asyncio.sleep(1.0)
+        await asyncio.sleep(1.2)
 
         paths = {
             "ban": "/api/bot/toggle_ban",
@@ -469,36 +484,39 @@ class ConfirmActionView(discord.ui.View):
                 )
 
                 if not user:
-                    return await interaction.followup.send(
+                    return await interaction.edit_original_response(
                         embed=make_embed(
                             "🔴 USER NOT FOUND",
                             "No action taken.",
-                            RED
-                        ),
-                        ephemeral=True
+                            RED,
+                            interaction.user,
+                            self.action
+                        )
                     )
 
                 status = str(user.get("status", "")).lower()
                 banned = status in ("banned", "ban", "disabled")
 
                 if self.action == "ban" and banned:
-                    return await interaction.followup.send(
+                    return await interaction.edit_original_response(
                         embed=make_embed(
                             "⚠️ ALREADY BANNED",
                             "No change made.",
-                            YELLOW
-                        ),
-                        ephemeral=True
+                            YELLOW,
+                            interaction.user,
+                            self.action
+                        )
                     )
 
                 if self.action == "unban" and not banned:
-                    return await interaction.followup.send(
+                    return await interaction.edit_original_response(
                         embed=make_embed(
                             "⚠️ NOT MARKED BANNED",
                             "No change made.",
-                            YELLOW
-                        ),
-                        ephemeral=True
+                            YELLOW,
+                            interaction.user,
+                            self.action
+                        )
                     )
 
             response = await api(
@@ -516,19 +534,17 @@ class ConfirmActionView(discord.ui.View):
             )
 
             if not 200 <= response.status_code < 300:
-                return await interaction.followup.send(
+                return await interaction.edit_original_response(
                     embed=make_embed(
                         "🔴 ACTION FAILED",
                         f"HTTP `{response.status_code}`\n"
                         f"```{message[:900]}```",
-                        RED
-                    ),
-                    ephemeral=True
+                        RED,
+                        interaction.user,
+                        self.action
+                    )
                 )
 
-            # Public Tagda Style like your screenshots (e.g., JC - JATIN used #delkey)
-            member_name = interaction.user.display_name
-            
             if self.action == "delete":
                 public_desc = f"✅ Key / User `{clean(self.username)}` permanently deleted from vault."
                 public_title = "🗑️ LICENSE KEY DELETED"
@@ -542,25 +558,15 @@ class ConfirmActionView(discord.ui.View):
                 public_desc = f"✅ Action `{self.action.upper()}` executed for `{clean(self.username)}`."
                 public_title = f"🟢 {self.action.upper()} SUCCESS"
 
-            public_embed = make_embed(
+            # Edit the original loading message to show success (No duplicate messages!)
+            success_embed = make_embed(
                 public_title,
                 public_desc,
-                RED if self.action in ("ban", "delete") else GREEN
+                RED if self.action in ("ban", "delete") else GREEN,
+                interaction.user,
+                self.action
             )
-            public_embed.set_author(name=f"{member_name} used #{self.action}", icon_url=interaction.user.display_avatar.url)
-            public_embed.set_footer(text=f"HSL Auth • Executed by @{interaction.user.name}")
-
-            if interaction.channel is not None:
-                await interaction.channel.send(embed=public_embed)
-
-            await interaction.followup.send(
-                embed=make_embed(
-                    f"🟢 {self.action.upper()} SUCCESS",
-                    f"Action executed successfully for `{clean(self.username)}`.",
-                    GREEN
-                ),
-                ephemeral=True
-            )
+            await interaction.edit_original_response(embed=success_embed)
 
             await audit(
                 f"**Action:** `{self.action.upper()}`\n"
@@ -571,9 +577,8 @@ class ConfirmActionView(discord.ui.View):
             )
 
         except Exception as exc:
-            await interaction.followup.send(
-                embed=make_embed("🔴 API ERROR", clean(exc, 1000), RED),
-                ephemeral=True
+            await interaction.edit_original_response(
+                embed=make_embed("🔴 API ERROR", clean(exc, 1000), RED, interaction.user, self.action)
             )
 
         self.stop()
@@ -588,7 +593,9 @@ class ConfirmActionView(discord.ui.View):
             embed=make_embed(
                 "ACTION CANCELLED",
                 "No changes were requested.",
-                YELLOW
+                YELLOW,
+                interaction.user,
+                self.action
             ),
             view=None
         )
@@ -635,7 +642,7 @@ class CreateAppSelect(discord.ui.Select):
 
         app_token = self.values[0]
 
-        # ⚡ Stylish Loading Simulation Bar for Creation
+        # ⚡ Loading animation inside the same message (Replaces loading with final result)
         await interaction.response.edit_message(
             embed=make_embed(
                 "⚡ PROVISIONING CLIENT ACCOUNT..",
@@ -647,7 +654,9 @@ class CreateAppSelect(discord.ui.Select):
                 f"» **Duration:** `{self.days if self.expiry_type == 'custom' else 'Lifetime'} Days`\n\n"
                 "`[ ⬛⬛⬛⬛⬛⬛⬛⬜⬜⬜ ] 70% • Hashing Passwords & Preparing HWID`\n"
                 "Lock...",
-                CYAN
+                CYAN,
+                interaction.user,
+                "adduser"
             ),
             view=None
         )
@@ -701,8 +710,6 @@ class CreateAppSelect(discord.ui.Select):
                     or data.get("generated_key")
                 )
 
-                # Stylish Tagda Public Embed format with user sticker
-                member_name = interaction.user.display_name
                 public_description = (
                     f"✅ **User** `{clean(self.username)}` **Created for HSL AUTH**\n\n"
                     f"» **Password:** `{clean(self.password)}`\n"
@@ -717,16 +724,15 @@ class CreateAppSelect(discord.ui.Select):
                         f"`{clean(generated_key, 150)}`"
                     )
 
+                # Edit loading message into success message directly!
                 public_embed = make_embed(
                     "🔴 CLIENT ACCOUNT CREATED",
                     public_description,
-                    RED
+                    RED,
+                    interaction.user,
+                    "adduser"
                 )
-                public_embed.set_author(name=f"{member_name} used #adduser", icon_url=interaction.user.display_avatar.url)
-                public_embed.set_footer(text=f"HSL Auth • Created by @{interaction.user.name}")
-
-                if interaction.channel is not None:
-                    await interaction.channel.send(embed=public_embed)
+                await interaction.edit_original_response(embed=public_embed)
 
                 private_embed = make_embed(
                     "🔐 PRIVATE LOGIN DETAILS",
@@ -734,7 +740,9 @@ class CreateAppSelect(discord.ui.Select):
                     f"**Username:** `{clean(self.username)}`\n"
                     f"**Password:** ||`{clean(self.password)}`||\n"
                     f"**Expiry:** `{expiry}`",
-                    GREEN
+                    GREEN,
+                    interaction.user,
+                    "adduser"
                 )
 
                 await interaction.followup.send(
@@ -752,24 +760,26 @@ class CreateAppSelect(discord.ui.Select):
                 )
 
             else:
-                await interaction.followup.send(
+                await interaction.edit_original_response(
                     embed=make_embed(
                         "🔴 CREATE FAILED",
                         f"HTTP `{response.status_code}`\n"
                         f"```{message[:1000]}```",
-                        RED
-                    ),
-                    ephemeral=True
+                        RED,
+                        interaction.user,
+                        "adduser"
+                    )
                 )
 
         except Exception as exc:
-            await interaction.followup.send(
+            await interaction.edit_original_response(
                 embed=make_embed(
                     "🔴 API ERROR",
                     clean(exc, 1000),
-                    RED
-                ),
-                ephemeral=True
+                    RED,
+                    interaction.user,
+                    "adduser"
+                )
             )
 
 
@@ -811,7 +821,9 @@ async def ping(interaction: discord.Interaction):
             "🏓 SYSTEM ONLINE",
             f"Latency: `{round(bot.latency * 1000)} ms`\n"
             "```diff\n+ HSL-CORP BOT OPERATIONAL\n```",
-            GREEN
+            GREEN,
+            interaction.user,
+            "ping"
         ),
         ephemeral=True
     )
@@ -832,7 +844,9 @@ async def help_command(interaction: discord.Interaction):
             "```ansi\n"
             "\x1b[1;31mSELECT APP → SELECT USER → CONFIRM\x1b[0m\n"
             "```",
-            RED
+            RED,
+            interaction.user,
+            "help"
         ),
         ephemeral=True
     )
@@ -852,7 +866,9 @@ async def add_app(
             embed=make_embed(
                 "⛔ OWNER ONLY",
                 "Only the bot owner can register apps.",
-                RED
+                RED,
+                interaction.user,
+                "add_app"
             ),
             ephemeral=True
         )
@@ -870,7 +886,9 @@ async def add_app(
             embed=make_embed(
                 "⚠️ INVALID INPUT",
                 "App name/token is empty or too long.",
-                YELLOW
+                YELLOW,
+                interaction.user,
+                "add_app"
             ),
             ephemeral=True
         )
@@ -883,7 +901,7 @@ async def add_app(
         )
     except sqlite3.Error as exc:
         return await interaction.response.send_message(
-            embed=make_embed("🔴 DATABASE ERROR", clean(exc), RED),
+            embed=make_embed("🔴 DATABASE ERROR", clean(exc), RED, interaction.user, "add_app"),
             ephemeral=True
         )
 
@@ -892,7 +910,9 @@ async def add_app(
             "🟢 APP REGISTERED",
             f"**App:** `{clean(app_name)}`\n"
             f"**Token:** ||`{clean(app_token, 100)}`||",
-            GREEN
+            GREEN,
+            interaction.user,
+            "add_app"
         ),
         ephemeral=True
     )
@@ -914,7 +934,9 @@ async def apps_command(interaction: discord.Interaction):
         embed=make_embed(
             f"📦 REGISTERED APPS ({len(apps)})",
             text[:3900],
-            CYAN
+            CYAN,
+            interaction.user,
+            "apps"
         ),
         ephemeral=True
     )
@@ -954,7 +976,9 @@ async def create(
                 "⚠️ INVALID INPUT",
                 "Username must be 1–80 characters; "
                 "password 1–256 characters.",
-                YELLOW
+                YELLOW,
+                interaction.user,
+                "adduser"
             ),
             ephemeral=True
         )
@@ -964,7 +988,9 @@ async def create(
             embed=make_embed(
                 "⚠️ INVALID EXPIRY",
                 "For custom expiry, `days` must be 1–36500.",
-                YELLOW
+                YELLOW,
+                interaction.user,
+                "adduser"
             ),
             ephemeral=True
         )
@@ -976,7 +1002,9 @@ async def create(
             embed=make_embed(
                 "📦 NO APPS",
                 "Register an app first with `/add_app`.",
-                YELLOW
+                YELLOW,
+                interaction.user,
+                "adduser"
             ),
             ephemeral=True
         )
@@ -1005,7 +1033,9 @@ async def create(
             f"» **Duration:** `{expiry}`\n\n"
             "_____________________________________\n\n"
             "*Select target Application from the dropdown below to create account:* ⚡",
-            CYAN
+            CYAN,
+            interaction.user,
+            "adduser"
         ),
         view=view,
         ephemeral=False
@@ -1026,7 +1056,9 @@ async def show_app_action(interaction, action):
             embed=make_embed(
                 "📦 NO APPS",
                 "Register an app first with `/add_app`.",
-                YELLOW
+                YELLOW,
+                interaction.user,
+                action
             ),
             ephemeral=True
         )
@@ -1036,7 +1068,9 @@ async def show_app_action(interaction, action):
             f"⚡ HSL-CORP • {action.upper()}",
             "👇 **STEP 1 — SELECT APPLICATION**\n\n"
             "After selecting an app, choose a username and confirm.",
-            RED if action in ("ban", "delete") else CYAN
+            RED if action in ("ban", "delete") else CYAN,
+            interaction.user,
+            action
         ),
         view=AppActionView(interaction.user.id, action, apps),
         ephemeral=True
@@ -1098,7 +1132,9 @@ async def set_log_channel(
         embed=make_embed(
             "🟢 AUDIT CHANNEL SET",
             f"Log channel: {channel.mention}",
-            GREEN
+            GREEN,
+            interaction.user,
+            "set_log_channel"
         ),
         ephemeral=True
     )
@@ -1118,7 +1154,9 @@ async def whitelist_add(
             embed=make_embed(
                 "⛔ OWNER ONLY",
                 "Only the owner can edit the whitelist.",
-                RED
+                RED,
+                interaction.user,
+                "whitelist_add"
             ),
             ephemeral=True
         )
@@ -1136,7 +1174,9 @@ async def whitelist_add(
             "🟢 WHITELIST UPDATED",
             f"**Member:** {member.mention}\n"
             f"**Command:** `{clean(command_name)}`",
-            GREEN
+            GREEN,
+            interaction.user,
+            "whitelist_add"
         ),
         ephemeral=True
     )
@@ -1156,7 +1196,9 @@ async def whitelist_remove(
             embed=make_embed(
                 "⛔ OWNER ONLY",
                 "Only the owner can edit the whitelist.",
-                RED
+                RED,
+                interaction.user,
+                "whitelist_remove"
             ),
             ephemeral=True
         )
@@ -1173,7 +1215,9 @@ async def whitelist_remove(
             "🗑️ WHITELIST ENTRY REMOVED",
             f"**Member:** {member.mention}\n"
             f"**Command:** `{clean(command_name)}`",
-            YELLOW
+            YELLOW,
+            interaction.user,
+            "whitelist_remove"
         ),
         ephemeral=True
     )
@@ -1201,7 +1245,9 @@ async def whitelist_list(interaction: discord.Interaction):
         embed=make_embed(
             "🛡️ ACCESS CONTROL LIST",
             description[:3900],
-            PURPLE
+            PURPLE,
+            interaction.user,
+            "whitelist_list"
         ),
         ephemeral=True
     )
@@ -1235,7 +1281,9 @@ async def update_gmail(
             embed=make_embed(
                 "⚠️ INVALID INPUT",
                 "Enter a valid username and email.",
-                YELLOW
+                YELLOW,
+                interaction.user,
+                "update_gmail"
             ),
             ephemeral=True
         )
@@ -1261,7 +1309,9 @@ async def update_gmail(
                     f"**Username:** `{clean(username)}`\n"
                     f"**Email:** `{clean(email)}`\n"
                     f"**API:** {clean(message, 600)}",
-                    GREEN
+                    GREEN,
+                    interaction.user,
+                    "update_gmail"
                 ),
                 ephemeral=True
             )
@@ -1277,14 +1327,16 @@ async def update_gmail(
                     "🔴 GMAIL UPDATE FAILED",
                     f"HTTP `{response.status_code}`\n"
                     f"```{message[:800]}```",
-                    RED
+                    RED,
+                    interaction.user,
+                    "update_gmail"
                 ),
                 ephemeral=True
             )
 
     except Exception as exc:
         await interaction.followup.send(
-            embed=make_embed("🔴 API ERROR", clean(exc, 900), RED),
+            embed=make_embed("🔴 API ERROR", clean(exc, 900), RED, interaction.user, "update_gmail"),
             ephemeral=True
         )
 
@@ -1326,7 +1378,9 @@ async def notify_login(
             embed=make_embed(
                 "⚠️ LOG CHANNEL NOT SET",
                 "Use `/set_log_channel` first.",
-                YELLOW
+                YELLOW,
+                interaction.user,
+                "notify_login"
             ),
             ephemeral=True
         )
@@ -1337,7 +1391,9 @@ async def notify_login(
     e = make_embed(
         "🛡️ HSL-CORP • LOGIN AUDIT",
         "Login audit notification",
-        GREEN if ok else RED
+        GREEN if ok else RED,
+        interaction.user,
+        "notify_login"
     )
 
     e.add_field(
@@ -1378,7 +1434,9 @@ async def notify_login(
         embed=make_embed(
             "🟢 AUDIT DISPATCHED",
             f"Sent to {channel.mention}.",
-            GREEN
+            GREEN,
+            interaction.user,
+            "notify_login"
         ),
         ephemeral=True
     )

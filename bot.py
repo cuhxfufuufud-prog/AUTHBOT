@@ -23,9 +23,10 @@ RED, GREEN, CYAN, YELLOW, PURPLE = (
     0xFF304F, 0x00F5A0, 0x00D9FF, 0xF1C40F, 0xA855F7
 )
 
-# Custom Animated Emojis & Sticker Asset Links provided by you
-TICK_EMOJI = "<a:animated_tick:1441097547350282260>"
-RED_EMOJI = "<a:red_emoji:1528079861283946538>"
+# Custom Animated Emojis & Stickers Links Provided by You
+TICK_EMOJI = "<a:tick:1441097547350282260>"
+RED_EMOJI = "<a:red:1528079861283946538>"
+RESET_EMOJI = "<a:reset:1441087243996496079>"
 PIKACHU_URL = "https://cdn.discordapp.com/emojis/1320787117881823252.webp?size=44&animated=true"
 
 intents = discord.Intents.default()
@@ -230,13 +231,12 @@ class AppActionSelect(discord.ui.Select):
         self.action = action
         self.target_username = target_username
 
-        # Red sticker emoji added to application selector options dropdown list
         options = [
             discord.SelectOption(
                 label=str(name)[:100],
                 value=str(token),
                 description="Choose this application",
-                emoji=discord.PartialEmoji.from_str(RED_EMOJI) if ":" in RED_EMOJI else "📦"
+                emoji="📦"
             )
             for name, token in apps[:25]
         ]
@@ -594,7 +594,7 @@ class CreateAppSelect(discord.ui.Select):
                 label=str(name)[:100],
                 value=str(token),
                 description="Create license in this app",
-                emoji=discord.PartialEmoji.from_str(RED_EMOJI) if ":" in RED_EMOJI else "🚀"
+                emoji="🚀"
             )
             for name, token in apps[:25]
         ]
@@ -778,10 +778,13 @@ async def show_app_action(interaction, action, username=None):
     if not apps:
         return await interaction.response.send_message(embed=make_embed("📦 NO APPS", "No apps found.", YELLOW, interaction.user, action), ephemeral=True)
 
+    # Use RESET_EMOJI for resethwid and RED_EMOJI for others like ban/delete/list
+    header_emoji = RESET_EMOJI if action == "resethwid" else RED_EMOJI
+
     await interaction.response.send_message(
         embed=make_embed(
-            f"{RED_EMOJI} HSL-CORP • {action.upper()}",
-            f"{f'**Target User:** `{clean(username)}`\n' if username else ''}👇 **STEP 1 — SELECT APPLICATION**",
+            f"{header_emoji} {action.upper()} • SELECT APPLICATION",
+            f"{f'{RESET_EMOJI} **Target User:** `{clean(username)}`\n' if username else ''}{RESET_EMOJI} Please choose which application belongs to:\n\n👇 **STEP 1 — SELECT APPLICATION**",
             RED if action in ("ban", "delete", "deluser") else CYAN,
             interaction.user,
             action
@@ -819,7 +822,7 @@ async def reset_hwid(interaction: discord.Interaction, username: str = None):
 async def set_log_channel(interaction: discord.Interaction, channel: discord.TextChannel):
     if await deny(interaction, "set_log_channel"): return
     db("INSERT INTO bot_settings (key, value) VALUES ('log_channel_id', ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", (str(channel.id),))
-    await interaction.response.send_message(embed=make_embed("🟢 AUDIT CHANNEL SET", f"Log channel: {channel.mention}", GREEN, interaction.user, "set_log_channel"))
+    await interaction.response.send_message(embed=make_embed(f"{TICK_EMOJI} AUDIT CHANNEL SET", f"Log channel: {channel.mention}", GREEN, interaction.user, "set_log_channel"))
 
 
 @bot.tree.command(name="update_gmail", description="📧 Update a license account Gmail")
@@ -829,7 +832,7 @@ async def update_gmail(interaction: discord.Interaction, username: str, email: s
     try:
         response = await api("POST", "/api/bot/update_gmail", json={"username": username.strip(), "gmail": email.strip()})
         data = parse_api_response(response)
-        await interaction.followup.send(embed=make_embed("📧 GMAIL UPDATE", f"Response: {clean(data.get('message', 'Done'), 600)}", GREEN, interaction.user, "update_gmail"))
+        await interaction.followup.send(embed=make_embed(f"{TICK_EMOJI} GMAIL UPDATE", f"Response: {clean(data.get('message', 'Done'), 600)}", GREEN, interaction.user, "update_gmail"))
     except Exception as exc:
         await interaction.followup.send(embed=make_embed("🔴 API ERROR", clean(exc, 900), RED, interaction.user, "update_gmail"))
 

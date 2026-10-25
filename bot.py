@@ -231,7 +231,6 @@ class AppActionSelect(discord.ui.Select):
         self.action = action
         self.target_username = target_username
 
-        # Safe PartialEmoji parsing for red sticker dropdown menu
         try:
             dropdown_emoji = discord.PartialEmoji.from_str(RED_EMOJI)
         except Exception:
@@ -414,7 +413,7 @@ class UserSelect(discord.ui.Select):
                         label=username[:100],
                         value=username[:100],
                         description=f"Status: {status}"[:100],
-                        emoji="🟢" if status.lower() == "active" else "🔴"
+                        emoji=discord.PartialEmoji.from_str(TICK_EMOJI) if status.lower() == "active" else discord.PartialEmoji.from_str(RED_EMOJI)
                     )
                 )
 

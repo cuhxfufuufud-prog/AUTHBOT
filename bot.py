@@ -231,12 +231,18 @@ class AppActionSelect(discord.ui.Select):
         self.action = action
         self.target_username = target_username
 
+        # Safe PartialEmoji parsing for red sticker dropdown menu
+        try:
+            dropdown_emoji = discord.PartialEmoji.from_str(RED_EMOJI)
+        except Exception:
+            dropdown_emoji = "📦"
+
         options = [
             discord.SelectOption(
                 label=str(name)[:100],
                 value=str(token),
                 description="Choose this application",
-                emoji="📦"
+                emoji=dropdown_emoji
             )
             for name, token in apps[:25]
         ]
@@ -589,12 +595,17 @@ class CreateAppSelect(discord.ui.Select):
         self.expiry_type = expiry_type
         self.days = days
 
+        try:
+            dropdown_emoji = discord.PartialEmoji.from_str(RED_EMOJI)
+        except Exception:
+            dropdown_emoji = "🚀"
+
         options = [
             discord.SelectOption(
                 label=str(name)[:100],
                 value=str(token),
                 description="Create license in this app",
-                emoji="🚀"
+                emoji=dropdown_emoji
             )
             for name, token in apps[:25]
         ]
@@ -778,7 +789,6 @@ async def show_app_action(interaction, action, username=None):
     if not apps:
         return await interaction.response.send_message(embed=make_embed("📦 NO APPS", "No apps found.", YELLOW, interaction.user, action), ephemeral=True)
 
-    # Use RESET_EMOJI for resethwid and RED_EMOJI for others like ban/delete/list
     header_emoji = RESET_EMOJI if action == "resethwid" else RED_EMOJI
 
     await interaction.response.send_message(

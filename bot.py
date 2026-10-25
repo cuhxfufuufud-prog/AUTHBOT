@@ -230,12 +230,13 @@ class AppActionSelect(discord.ui.Select):
         self.action = action
         self.target_username = target_username
 
+        # Red sticker emoji added to application selector options dropdown list
         options = [
             discord.SelectOption(
                 label=str(name)[:100],
                 value=str(token),
                 description="Choose this application",
-                emoji="📦"
+                emoji=discord.PartialEmoji.from_str(RED_EMOJI) if ":" in RED_EMOJI else "📦"
             )
             for name, token in apps[:25]
         ]
@@ -589,7 +590,12 @@ class CreateAppSelect(discord.ui.Select):
         self.days = days
 
         options = [
-            discord.SelectOption(label=str(name)[:100], value=str(token), description="Create license in this app", emoji="🚀")
+            discord.SelectOption(
+                label=str(name)[:100],
+                value=str(token),
+                description="Create license in this app",
+                emoji=discord.PartialEmoji.from_str(RED_EMOJI) if ":" in RED_EMOJI else "🚀"
+            )
             for name, token in apps[:25]
         ]
         super().__init__(placeholder="📦 STEP 1 — SELECT APPLICATION", min_values=1, max_values=1, options=options)

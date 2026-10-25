@@ -24,8 +24,8 @@ RED, GREEN, CYAN, YELLOW, PURPLE = (
 )
 
 # Custom Animated Emojis & Stickers Links Provided by You
-TICK_EMOJI = "<a:tick:1441097547350282260>"
-RED_EMOJI = "<a:red:1528079861283946538>"
+TICK_EMOJI = "<a:animated_tick:1441097547350282260>"
+RED_EMOJI = "<a:red_emoji:1528079861283946538>"
 RESET_EMOJI = "<a:reset:1441087243996496079>"
 PIKACHU_URL = "https://cdn.discordapp.com/emojis/1320787117881823252.webp?size=44&animated=true"
 
@@ -408,12 +408,17 @@ class UserSelect(discord.ui.Select):
             username = str(user.get("username", ""))
             if username:
                 status = str(user.get("status", "unknown"))
+                try:
+                    opt_emoji = discord.PartialEmoji.from_str(TICK_EMOJI) if status.lower() == "active" else discord.PartialEmoji.from_str(RED_EMOJI)
+                except Exception:
+                    opt_emoji = "🟢" if status.lower() == "active" else "🔴"
+
                 options.append(
                     discord.SelectOption(
                         label=username[:100],
                         value=username[:100],
                         description=f"Status: {status}"[:100],
-                        emoji=discord.PartialEmoji.from_str(TICK_EMOJI) if status.lower() == "active" else discord.PartialEmoji.from_str(RED_EMOJI)
+                        emoji=opt_emoji
                     )
                 )
 

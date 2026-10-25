@@ -23,7 +23,7 @@ RED, GREEN, CYAN, YELLOW, PURPLE = (
     0xFF304F, 0x00F5A0, 0x00D9FF, 0xF1C40F, 0xA855F7
 )
 
-# Dropdown menu ke liye red sticker asset link
+# Dropdown menu aur delete app ke liye red sticker asset link
 RED_EMOJI = "<a:red_emoji:1528079861283946538>"
 PIKACHU_URL = "https://cdn.discordapp.com/emojis/1320787117881823252.webp?size=44&animated=true"
 
@@ -601,7 +601,7 @@ class CreateAppSelect(discord.ui.Select):
             discord.SelectOption(
                 label=str(name)[:100],
                 value=str(token),
-                description="Choose this application",
+                description="Create license in this app",
                 emoji=dropdown_emoji
             )
             for name, token in apps[:25]

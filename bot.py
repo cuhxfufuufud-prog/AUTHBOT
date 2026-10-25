@@ -228,7 +228,8 @@ class AppActionSelect(discord.ui.Select):
             discord.SelectOption(
                 label=str(name)[:100],
                 value=str(token),
-                description="Choose this application"
+                description="Choose this application",
+                emoji="📦"
             )
             for name, token in apps[:25]
         ]
@@ -251,7 +252,7 @@ class AppActionSelect(discord.ui.Select):
         app_rows = [row for row in get_apps() if row[1] == app_token]
         app_name = app_rows[0][0] if app_rows else "Selected application"
 
-        await interaction.response.defer(ephemeral=True, thinking=True)
+        await interaction.response.defer(thinking=True)
 
         try:
             users = await get_app_users(app_token)
@@ -263,8 +264,7 @@ class AppActionSelect(discord.ui.Select):
                     "**Note:** `/api/bot/users` must support "
                     "`app_token` filtering in `app.py`.",
                     RED
-                ),
-                ephemeral=True
+                )
             )
 
         if self.action == "list":
@@ -289,8 +289,7 @@ class AppActionSelect(discord.ui.Select):
                     CYAN,
                     interaction.user,
                     "list"
-                ),
-                ephemeral=True
+                )
             )
 
         if not users:
@@ -301,8 +300,7 @@ class AppActionSelect(discord.ui.Select):
                     YELLOW,
                     interaction.user,
                     self.action
-                ),
-                ephemeral=True
+                )
             )
 
         await interaction.followup.send(
@@ -321,8 +319,7 @@ class AppActionSelect(discord.ui.Select):
                 app_name,
                 app_token,
                 users
-            ),
-            ephemeral=True
+            )
         )
 
 
@@ -362,7 +359,8 @@ class UserSelect(discord.ui.Select):
                 discord.SelectOption(
                     label="No selectable usernames",
                     value="__none__",
-                    description="No usernames were returned"
+                    description="No usernames were returned",
+                    emoji="⚠️"
                 )
             ]
 
@@ -439,29 +437,37 @@ class ConfirmActionView(discord.ui.View):
 
     @discord.ui.button(
         label="CONFIRM",
-        emoji="⚠️",
+        emoji="⚡",
         style=discord.ButtonStyle.danger
     )
     async def confirm(self, interaction: discord.Interaction, button):
         action_title = self.action.upper()
         
-        # Show loading animation in place
-        await interaction.response.edit_message(
-            embed=make_embed(
-                f"⚡ PROCESSING {action_title}...",
-                "```ansi\n"
-                f"\x1b[1;36m🔄 Executing {action_title} Protocol...\x1b[0m\n"
-                "```\n"
-                f"» **Target User:** `{clean(self.username)}`\n"
-                f"» **App:** `{clean(self.app_name)}`\n\n"
-                "`[ ⬛⬛⬛⬛⬛⬛⬛⬜⬜⬜ ] 70% • Secure API Dispatch`",
-                CYAN,
-                interaction.user,
-                self.action
-            ),
-            view=None
-        )
-        await asyncio.sleep(1.2)
+        # Smooth Animated Progress steps (10% -> 40% -> 70% -> 100%)
+        stages = [
+            ("`[ █░░░░░░░░░ ] 10% • Initializing Secure Handshake`", 0.4),
+            ("`[ ████░░░░░░ ] 40% • Dispatching API Payload`", 0.4),
+            ("`[ ███████░░░ ] 70% • Processing Database State`", 0.4),
+            ("`[ ██████████ ] 100% • Finalizing Protocol`", 0.3)
+        ]
+
+        for bar_text, delay in stages:
+            await interaction.response.edit_message(
+                embed=make_embed(
+                    f"⚡ PROCESSING {action_title}...",
+                    "```ansi\n"
+                    f"\x1b[1;36m🔄 Executing {action_title} Protocol...\x1b[0m\n"
+                    "```\n"
+                    f"» **Target User:** `{clean(self.username)}`\n"
+                    f"» **App:** `{clean(self.app_name)}`\n\n"
+                    f"{bar_text}",
+                    CYAN,
+                    interaction.user,
+                    self.action
+                ),
+                view=None
+            )
+            await asyncio.sleep(delay)
 
         paths = {
             "ban": "/api/bot/toggle_ban",
@@ -558,7 +564,6 @@ class ConfirmActionView(discord.ui.View):
                 public_desc = f"✅ Action `{self.action.upper()}` executed for `{clean(self.username)}`."
                 public_title = f"🟢 {self.action.upper()} SUCCESS"
 
-            # Edit the original loading message to show success (No duplicate messages!)
             success_embed = make_embed(
                 public_title,
                 public_desc,
@@ -617,7 +622,8 @@ class CreateAppSelect(discord.ui.Select):
             discord.SelectOption(
                 label=str(name)[:100],
                 value=str(token),
-                description="Create license in this app"
+                description="Create license in this app",
+                emoji="🚀"
             )
             for name, token in apps[:25]
         ]
@@ -642,25 +648,32 @@ class CreateAppSelect(discord.ui.Select):
 
         app_token = self.values[0]
 
-        # ⚡ Loading animation inside the same message (Replaces loading with final result)
-        await interaction.response.edit_message(
-            embed=make_embed(
-                "⚡ PROVISIONING CLIENT ACCOUNT..",
-                "```ansi\n"
-                "\x1b[1;36m🔄 Creating Zero-Leak Credentials...\x1b[0m\n"
-                "```\n"
-                f"» **Username:** `{clean(self.username)}`\n"
-                f"» **Target App:** `HSL AUTH SYSTEM`\n"
-                f"» **Duration:** `{self.days if self.expiry_type == 'custom' else 'Lifetime'} Days`\n\n"
-                "`[ ⬛⬛⬛⬛⬛⬛⬛⬜⬜⬜ ] 70% • Hashing Passwords & Preparing HWID`\n"
-                "Lock...",
-                CYAN,
-                interaction.user,
-                "adduser"
-            ),
-            view=None
-        )
-        await asyncio.sleep(1.2)
+        # Smooth Loading animation stages with 10%, 40%, 70%, 100% progression
+        create_stages = [
+            ("`[ █░░░░░░░░░ ] 10% • Initializing Secure Handshake`", 0.4),
+            ("`[ ████░░░░░░ ] 40% • Hashing Passwords & Preparing HWID`", 0.4),
+            ("`[ ███████░░░ ] 70% • Registering Key in Vault`", 0.4),
+            ("`[ ██████████ ] 100% • Provisioning Complete`", 0.3)
+        ]
+
+        for bar_text, delay in create_stages:
+            await interaction.response.edit_message(
+                embed=make_embed(
+                    "⚡ PROVISIONING CLIENT ACCOUNT..",
+                    "```ansi\n"
+                    "\x1b[1;36m🔄 Creating Zero-Leak Credentials...\x1b[0m\n"
+                    "```\n"
+                    f"» **Username:** `{clean(self.username)}`\n"
+                    f"» **Target App:** `HSL AUTH SYSTEM`\n"
+                    f"» **Duration:** `{self.days if self.expiry_type == 'custom' else 'Lifetime'} Days`\n\n"
+                    f"{bar_text}",
+                    CYAN,
+                    interaction.user,
+                    "adduser"
+                ),
+                view=None
+            )
+            await asyncio.sleep(delay)
 
         payload = {
             "username": self.username,
@@ -711,6 +724,7 @@ class CreateAppSelect(discord.ui.Select):
                 )
 
                 public_description = (
+                    f"🟢 **CLIENT ACCOUNT CREATED**\n"
                     f"✅ **User** `{clean(self.username)}` **Created for HSL AUTH**\n\n"
                     f"» **Password:** `{clean(self.password)}`\n"
                     f"» **Subscription:** `default`\n"
@@ -724,7 +738,6 @@ class CreateAppSelect(discord.ui.Select):
                         f"`{clean(generated_key, 150)}`"
                     )
 
-                # Edit loading message into success message directly!
                 public_embed = make_embed(
                     "🔴 CLIENT ACCOUNT CREATED",
                     public_description,
@@ -824,8 +837,7 @@ async def ping(interaction: discord.Interaction):
             GREEN,
             interaction.user,
             "ping"
-        ),
-        ephemeral=True
+        )
     )
 
 
@@ -847,8 +859,7 @@ async def help_command(interaction: discord.Interaction):
             RED,
             interaction.user,
             "help"
-        ),
-        ephemeral=True
+        )
     )
 
 
@@ -913,8 +924,7 @@ async def add_app(
             GREEN,
             interaction.user,
             "add_app"
-        ),
-        ephemeral=True
+        )
     )
 
 
@@ -937,8 +947,7 @@ async def apps_command(interaction: discord.Interaction):
             CYAN,
             interaction.user,
             "apps"
-        ),
-        ephemeral=True
+        )
     )
 
 
@@ -1037,8 +1046,7 @@ async def create(
             interaction.user,
             "adduser"
         ),
-        view=view,
-        ephemeral=False
+        view=view
     )
 
 
@@ -1072,8 +1080,7 @@ async def show_app_action(interaction, action):
             interaction.user,
             action
         ),
-        view=AppActionView(interaction.user.id, action, apps),
-        ephemeral=True
+        view=AppActionView(interaction.user.id, action, apps)
     )
 
 
@@ -1109,7 +1116,7 @@ async def reset_hwid(interaction: discord.Interaction):
 
 
 # =========================================================
-# AUDIT & WHITELIST COMMANDS (UNTOUCHED)
+# AUDIT & WHITELIST COMMANDS
 # =========================================================
 @bot.tree.command(
     name="set_log_channel",
@@ -1135,8 +1142,7 @@ async def set_log_channel(
             GREEN,
             interaction.user,
             "set_log_channel"
-        ),
-        ephemeral=True
+        )
     )
 
 
@@ -1177,8 +1183,7 @@ async def whitelist_add(
             GREEN,
             interaction.user,
             "whitelist_add"
-        ),
-        ephemeral=True
+        )
     )
 
 
@@ -1218,8 +1223,7 @@ async def whitelist_remove(
             YELLOW,
             interaction.user,
             "whitelist_remove"
-        ),
-        ephemeral=True
+        )
     )
 
 
@@ -1248,8 +1252,7 @@ async def whitelist_list(interaction: discord.Interaction):
             PURPLE,
             interaction.user,
             "whitelist_list"
-        ),
-        ephemeral=True
+        )
     )
 
 
@@ -1288,7 +1291,7 @@ async def update_gmail(
             ephemeral=True
         )
 
-    await interaction.response.defer(ephemeral=True, thinking=True)
+    await interaction.response.defer(thinking=True)
 
     try:
         response = await api(
@@ -1312,8 +1315,7 @@ async def update_gmail(
                     GREEN,
                     interaction.user,
                     "update_gmail"
-                ),
-                ephemeral=True
+                )
             )
 
             await audit(
@@ -1330,14 +1332,12 @@ async def update_gmail(
                     RED,
                     interaction.user,
                     "update_gmail"
-                ),
-                ephemeral=True
+                )
             )
 
     except Exception as exc:
         await interaction.followup.send(
-            embed=make_embed("🔴 API ERROR", clean(exc, 900), RED, interaction.user, "update_gmail"),
-            ephemeral=True
+            embed=make_embed("🔴 API ERROR", clean(exc, 900), RED, interaction.user, "update_gmail")
         )
 
 
@@ -1437,8 +1437,7 @@ async def notify_login(
             GREEN,
             interaction.user,
             "notify_login"
-        ),
-        ephemeral=True
+        )
     )
 
 

@@ -184,8 +184,6 @@ def init_db():
         )
     """)
 
-  # Safe migration for existing Railway SQLite databases.
-  # Existing users are treated as lifetime users and their data is preserved.
   cur.execute("PRAGMA table_info(tool_users)")
   existing_columns = {row[1] for row in cur.fetchall()}
   if "created_at" not in existing_columns:
@@ -194,6 +192,7 @@ def init_db():
     cur.execute("ALTER TABLE tool_users ADD COLUMN expiry_type TEXT NOT NULL DEFAULT 'lifetime'")
   if "expires_at" not in existing_columns:
     cur.execute("ALTER TABLE tool_users ADD COLUMN expires_at TEXT")
+
   cur.execute("""
 CREATE TABLE IF NOT EXISTS login_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -218,7 +217,6 @@ ON login_history(app_token)
 init_db()
 
 
-
 def db(query, params=(), fetch=False):
     con = sqlite3.connect(DATABASE_PATH, timeout=30)
 
@@ -237,8 +235,6 @@ def db(query, params=(), fetch=False):
 
     finally:
         con.close()
-
-         
 
 
 # ==========================================
@@ -403,7 +399,6 @@ COMMON_HEAD = """
 
   button:active, a:active { transform: scale(.97); }
 
-  /* Makes Tailwind gradient buttons look more aggressive without changing markup. */
   .bg-gradient-to-r {
     background-size: 180% 100%;
     animation: gradientShift 5s ease infinite;
@@ -414,7 +409,6 @@ COMMON_HEAD = """
     50% { background-position: 100% 50%; }
   }
 
-  /* Animated cyber corners for major panels. */
   .glass-card::after,
   .glass::after {
     content: "";
@@ -624,7 +618,7 @@ CURSOR_SCRIPT = """
 """
 
 # ==========================================
-# UI TEMPLATES (LANDING, LOGIN & DASHBOARD)
+# UI TEMPLATES
 # ==========================================
 
 LANDING = (
@@ -1127,8 +1121,7 @@ def dash():
 
   keys = (
       db(
-          "SELECT * FROM keys WHERE app_token IN (SELECT token FROM apps WHERE"
-          " owner_email=?)",
+          "SELECT * FROM keys WHERE app_token IN (SELECT token FROM apps WHERE owner_email=?)",
           (email,),
           True,
       )
@@ -1149,8 +1142,7 @@ def dash():
     ])
   else:
     keys_list_html = (
-        "<p class='text-center text-zinc-600 text-xs mt-10'>No keys generated"
-        " yet.</p>"
+        "<p class='text-center text-zinc-600 text-xs mt-10'>No keys generated yet.</p>"
     )
 
   tool_users = (
@@ -1200,8 +1192,7 @@ def dash():
 
   if not tool_users_list_html:
     tool_users_list_html = (
-        "<p class='text-center text-zinc-600 text-xs mt-10'>No registered users"
-        " found.</p>"
+        "<p class='text-center text-zinc-600 text-xs mt-10'>No registered users found.</p>"
     )
 
   html = (
@@ -1231,14 +1222,12 @@ def check_limit(email):
     return False
 
   tool_users = db(
-      "SELECT COUNT(*) FROM tool_users WHERE app_token IN (SELECT token FROM"
-      " apps WHERE owner_email=?)",
+      "SELECT COUNT(*) FROM tool_users WHERE app_token IN (SELECT token FROM apps WHERE owner_email=?)",
       (email,),
       True,
   )
   keys = db(
-      "SELECT COUNT(*) FROM keys WHERE app_token IN (SELECT token FROM apps"
-      " WHERE owner_email=?)",
+      "SELECT COUNT(*) FROM keys WHERE app_token IN (SELECT token FROM apps WHERE owner_email=?)",
       (email,),
       True,
   )
@@ -1257,7 +1246,6 @@ def api_create_app():
   email = session["user"]["email"]
   apps = db("SELECT COUNT(*) FROM apps WHERE owner_email=?", (email,), True)
 
-  # Free Plan limit set to 2 Applications max
   if email not in PAID_USERS and apps[0][0] >= 2:
     return jsonify({
         "error": (
@@ -1291,7 +1279,6 @@ def api_delete_app():
   email = session["user"]["email"]
   token = request.json.get("token")
 
-  # Verify ownership before deleting
   app_check = db(
       "SELECT * FROM apps WHERE token=? AND owner_email=?", (token, email), True
   )
@@ -1418,27 +1405,25 @@ def send_login_log(username, status_msg, hwid, ip_addr):
     if not DISCORD_LOG_WEBHOOK_URL or "YOUR_DISCORD" in DISCORD_LOG_WEBHOOK_URL:
         return
     
-    # Live Timestamp for Discord (<t:EPOCH:F>)
     current_time = int(time.time())
     timestamp_str = f"<t:{current_time}:F> (<t:{current_time}:R>)"
     
-    # Status Styles & Colors
     if status_msg == "valid":
-        color = 0x2ECC71  # Vibrant Emerald Green
+        color = 0x2ECC71
         status_badge = "🟢 `SUCCESS / AUTHENTICATED`"
     elif "HWID Bound" in status_msg:
-        color = 0x3498DB  # Electric Blue
+        color = 0x3498DB
         status_badge = "🔵 `NEW DEVICE BOUND`"
     elif status_msg == "hwid_mismatch":
-        color = 0xE67E22  # Orange Warning
+        color = 0xE67E22
         status_badge = "🟠 `HWID MISMATCH DETECTED`"
     else:
-        color = 0xE74C3C  # Crimson Red
+        color = 0xE74C3C
         status_badge = f"🔴 `FAILED ({status_msg.upper()})`"
 
     payload = {
         "username": "HSL AUTH BOT",
-        "avatar_url": "https://images-ext-1.discordapp.net/external/H9ZL2wi0olXisnxXBPBNi8GO6sQebrD5_SwF-EfuulM/https/media3.giphy.com/media/v1.Y2lkPTc5MGI3NjExZ3RqemR3c3A0MHl3NWw1NHE4a2FjdWVkdDdqdXppaXdxdHhobGF5ayZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/iBILBPeCHDVuELjOND/giphy.gif", # HSL Logo URL
+        "avatar_url": "https://images-ext-1.discordapp.net/external/H9ZL2wi0olXisnxXBPBNi8GO6sQebrD5_SwF-EfuulM/https/media3.giphy.com/media/v1.Y2lkPTc5MGI3NjExZ3RqemR3c3A0MHl3NWw1NHE4a2FjdWVkdDdqdXppaXdxdHhobGF5ayZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/iBILBPeCHDVuELjOND/giphy.gif",
         "embeds": [{
             "title": "🛡️ HSL CORPORATION • LOGIN AUDIT LOG",
             "color": color,
@@ -1446,7 +1431,7 @@ def send_login_log(username, status_msg, hwid, ip_addr):
             "fields": [
                 {"name": "👤 User Identity", "value": f"```{username}```", "inline": True},
                 {"name": "📊 Security Status", "value": status_badge, "inline": True},
-                {"name": "\u200b", "value": "\u200b", "inline": True}, # Spacing column
+                {"name": "\u200b", "value": "\u200b", "inline": True},
                 {"name": "⏰ Timestamp", "value": timestamp_str, "inline": False},
                 {"name": "🌐 IP Address", "value": f"[{ip_addr}](https://ip-api.com/#'{ip_addr}')", "inline": True},
                 {"name": "💻 Hardware ID (HWID)", "value": f"```{hwid}```", "inline": False}
@@ -1462,10 +1447,6 @@ def send_login_log(username, status_msg, hwid, ip_addr):
         requests.post(DISCORD_LOG_WEBHOOK_URL, json=payload, timeout=3)
     except Exception as e:
         print(f"Failed to send Discord Log: {e}")
-
-
-
-    
 
 
 @app.route("/api/auth_login", methods=["POST"])
@@ -1494,10 +1475,17 @@ def api_auth_login():
         return jsonify({"status": "invalid", "message": "Incorrect credentials"})
 
     user_row = res[0]
-    # New columns are appended by the migration: expiry_type at index 7,
-    # expires_at at index 8. Old records default to lifetime.
     expiry_type = user_row[7] if len(user_row) > 7 and user_row[7] else "lifetime"
     expires_at = user_row[8] if len(user_row) > 8 else None
+    
+    def is_tool_user_expired(exp_str):
+        if not exp_str:
+            return False
+        try:
+            return datetime.now() > datetime.fromisoformat(exp_str)
+        except Exception:
+            return False
+
     if expiry_type == "custom" and is_tool_user_expired(expires_at):
         send_login_log(username, "expired", hwid, client_ip)
         return jsonify({"status": "expired", "message": "License expired. Contact the owner."}), 403
@@ -1520,15 +1508,23 @@ def api_auth_login():
 
 
 # ==========================================
-# DISCORD BOT INTEGRATION API ENDPOINTS
+# DISCORD BOT INTEGRATION API ENDPOINTS (APP_TOKEN FILTERING FIXED)
 # ==========================================
 
 
 @app.route("/api/bot/users", methods=["GET"])
 def api_bot_get_users():
-  tool_users = db(
-      "SELECT username, status, hwid, app_token FROM tool_users", fetch=True
-  )
+  app_token = request.args.get("app_token")
+  
+  if app_token:
+    tool_users = db(
+        "SELECT username, status, hwid, app_token FROM tool_users WHERE app_token=?", (app_token,), fetch=True
+    )
+  else:
+    tool_users = db(
+        "SELECT username, status, hwid, app_token FROM tool_users", fetch=True
+    )
+    
   users_list = []
   for u in tool_users:
     users_list.append({
@@ -1601,12 +1597,10 @@ def logout():
 # SERVER RUNNER
 # ==========================================
 
-# TEMPORARY PROTECTED DATABASE BACKUP DOWNLOAD
 @app.route("/__temporary_db_backup", methods=["GET", "POST"])
 def temporary_db_backup():
     expected_token = os.environ.get("DB_BACKUP_TOKEN", "")
 
-    # Route remains disabled unless a token is configured.
     if len(expected_token) < 32:
         return "Backup route disabled", 404
 

@@ -23,7 +23,7 @@ RED, GREEN, CYAN, YELLOW, PURPLE = (
     0xFF304F, 0x00F5A0, 0x00D9FF, 0xF1C40F, 0xA855F7
 )
 
-# Custom Emojis & Animated Sticker Asset Links
+# Custom Animated Emojis & Sticker Asset Links provided by you
 TICK_EMOJI = "<a:animated_tick:1441097547350282260>"
 RED_EMOJI = "<a:red_emoji:1528079861283946538>"
 PIKACHU_URL = "https://cdn.discordapp.com/emojis/1320787117881823252.webp?size=44&animated=true"
@@ -258,13 +258,12 @@ class AppActionSelect(discord.ui.Select):
         app_rows = [row for row in get_apps() if row[1] == app_token]
         app_name = app_rows[0][0] if app_rows else "Selected application"
 
-        # Handle App Deletion directly from dropdown selection
         if self.action == "delete_app":
             try:
                 db("DELETE FROM apps WHERE token=?", (app_token,))
                 await interaction.response.edit_message(
                     embed=make_embed(
-                        "🗑️ APPLICATION DELETED",
+                        f"{RED_EMOJI} APPLICATION DELETED",
                         f"{TICK_EMOJI} Application **{clean(app_name)}** has been successfully removed from bot registry.",
                         RED,
                         interaction.user,
@@ -306,7 +305,7 @@ class AppActionSelect(discord.ui.Select):
 
             return await interaction.response.edit_message(
                 embed=make_embed(
-                    f"👥 {clean(app_name)} • USERS ({len(users)})",
+                    f"{RED_EMOJI} {clean(app_name)} • USERS ({len(users)})",
                     "\n".join(lines)[:3900] or "No users returned for this app.",
                     CYAN,
                     interaction.user,
@@ -334,7 +333,7 @@ class AppActionSelect(discord.ui.Select):
             
             return await interaction.response.edit_message(
                 embed=make_embed(
-                    "⚠️ CONFIRM ACTION",
+                    f"{RED_EMOJI} CONFIRM ACTION",
                     f"**Application:** `{clean(app_name)}`\n"
                     f"**Action:** `{self.action.upper()}`\n"
                     f"**Username:** `{clean(self.target_username)}`\n\n"
@@ -366,7 +365,7 @@ class AppActionSelect(discord.ui.Select):
 
         await interaction.response.edit_message(
             embed=make_embed(
-                f"⚡ {self.action.upper()} • {clean(app_name)}",
+                f"{RED_EMOJI} {self.action.upper()} • {clean(app_name)}",
                 f"**Application:** `{clean(app_name)}`\n"
                 f"**Users:** `{len(users)}`\n\n"
                 "👇 **STEP 2 — Select a username.**",
@@ -442,7 +441,7 @@ class UserSelect(discord.ui.Select):
 
         await interaction.response.edit_message(
             embed=make_embed(
-                "⚠️ CONFIRM ACTION",
+                f"{RED_EMOJI} CONFIRM ACTION",
                 f"**Application:** `{clean(self.app_name)}`\n"
                 f"**Action:** `{self.action.upper()}`\n"
                 f"**Username:** `{clean(username)}`\n\n"
@@ -502,7 +501,7 @@ class ConfirmActionView(discord.ui.View):
 
         await interaction.response.edit_message(
             embed=make_embed(
-                f"⚡ PROCESSING {action_title}...",
+                f"{RED_EMOJI} PROCESSING {action_title}...",
                 f"```ansi\n\x1b[1;36m🔄 Executing {action_title} Protocol...\x1b[0m\n```\n"
                 f"» **Target User:** `{clean(self.username)}`\n» **App:** `{clean(self.app_name)}`\n\n{stages[0][0]}",
                 CYAN,
@@ -516,7 +515,7 @@ class ConfirmActionView(discord.ui.View):
         for bar_text, delay in stages[1:]:
             await interaction.edit_original_response(
                 embed=make_embed(
-                    f"⚡ PROCESSING {action_title}...",
+                    f"{RED_EMOJI} PROCESSING {action_title}...",
                     f"```ansi\n\x1b[1;36m🔄 Executing {action_title} Protocol...\x1b[0m\n```\n"
                     f"» **Target User:** `{clean(self.username)}`\n» **App:** `{clean(self.app_name)}`\n\n{bar_text}",
                     CYAN,
@@ -542,16 +541,16 @@ class ConfirmActionView(discord.ui.View):
 
             if self.action == "delete":
                 public_desc = f"{TICK_EMOJI} Key / User `{clean(self.username)}` permanently deleted from vault."
-                public_title = "🗑️ LICENSE KEY DELETED"
+                public_title = f"{RED_EMOJI} LICENSE KEY DELETED"
             elif self.action == "resethwid":
                 public_desc = f"{TICK_EMOJI} HWID for user `{clean(self.username)}` has been successfully reset."
-                public_title = "🔄 HWID RESET SUCCESSFUL"
+                public_title = f"{RED_EMOJI} HWID RESET SUCCESSFUL"
             elif self.action in ("ban", "unban"):
                 public_desc = f"{TICK_EMOJI} User `{clean(self.username)}` status updated: `{self.action.upper()}`."
-                public_title = f"🛡️ USER {self.action.upper()}"
+                public_title = f"{RED_EMOJI} USER {self.action.upper()}"
             else:
                 public_desc = f"{TICK_EMOJI} Action `{self.action.upper()}` executed for `{clean(self.username)}`."
-                public_title = f"🟢 {self.action.upper()} SUCCESS"
+                public_title = f"{RED_EMOJI} {self.action.upper()} SUCCESS"
 
             success_embed = make_embed(
                 public_title,
@@ -609,7 +608,7 @@ class CreateAppSelect(discord.ui.Select):
 
         await interaction.response.edit_message(
             embed=make_embed(
-                "⚡ PROVISIONING CLIENT ACCOUNT..",
+                f"{RED_EMOJI} PROVISIONING CLIENT ACCOUNT..",
                 f"```ansi\n\x1b[1;36m🔄 Creating Zero-Leak Credentials...\x1b[0m\n```\n"
                 f"» **Username:** `{clean(self.username)}`\n» **Duration:** `{self.days if self.expiry_type == 'custom' else 'Lifetime'} Days`\n\n{create_stages[0][0]}",
                 CYAN,
@@ -623,7 +622,7 @@ class CreateAppSelect(discord.ui.Select):
         for bar_text, delay in create_stages[1:]:
             await interaction.edit_original_response(
                 embed=make_embed(
-                    "⚡ PROVISIONING CLIENT ACCOUNT..",
+                    f"{RED_EMOJI} PROVISIONING CLIENT ACCOUNT..",
                     f"```ansi\n\x1b[1;36m🔄 Creating Zero-Leak Credentials...\x1b[0m\n```\n"
                     f"» **Username:** `{clean(self.username)}`\n» **Duration:** `{self.days if self.expiry_type == 'custom' else 'Lifetime'} Days`\n\n{bar_text}",
                     CYAN,
@@ -660,7 +659,7 @@ class CreateAppSelect(discord.ui.Select):
                 if generated_key:
                     public_description += f"\n» **Generated Key:** `{clean(generated_key, 150)}`"
 
-                public_embed = make_embed("🔴 CLIENT ACCOUNT CREATED", public_description, RED, interaction.user, "adduser")
+                public_embed = make_embed(f"{RED_EMOJI} CLIENT ACCOUNT CREATED", public_description, RED, interaction.user, "adduser")
                 await interaction.edit_original_response(embed=public_embed)
 
                 private_embed = make_embed(
@@ -711,7 +710,7 @@ async def ping(interaction: discord.Interaction):
 async def help_command(interaction: discord.Interaction):
     await interaction.response.send_message(
         embed=make_embed(
-            "⚡ HSL-CORP • CONTROL PANEL",
+            f"{RED_EMOJI} HSL-CORP • CONTROL PANEL",
             "**USER ACTIONS**\n`/create` `/list` `/ban` `/unban` `/deluser` `/resethwid`\n\n**APP MANAGEMENT**\n`/add_app` `/apps` `/delete_app`",
             RED,
             interaction.user,
@@ -726,7 +725,7 @@ async def add_app(interaction: discord.Interaction, app_name: str, app_token: st
         return await interaction.response.send_message(embed=make_embed("⛔ OWNER ONLY", "Only owner can add apps.", RED, interaction.user, "add_app"), ephemeral=True)
     
     db("INSERT INTO apps (name, token) VALUES (?, ?) ON CONFLICT(token) DO UPDATE SET name=excluded.name", (app_name.strip(), app_token.strip()))
-    await interaction.response.send_message(embed=make_embed("🟢 APP REGISTERED", f"**App:** `{clean(app_name)}`", GREEN, interaction.user, "add_app"))
+    await interaction.response.send_message(embed=make_embed(f"{RED_EMOJI} APP REGISTERED", f"**App:** `{clean(app_name)}`", GREEN, interaction.user, "add_app"))
 
 
 @bot.tree.command(name="apps", description="📦 List apps registered in this bot")
@@ -747,7 +746,7 @@ async def delete_app_cmd(interaction: discord.Interaction):
         return await interaction.response.send_message(embed=make_embed("📦 NO APPS", "No registered apps found.", YELLOW, interaction.user, "delete_app"), ephemeral=True)
 
     await interaction.response.send_message(
-        embed=make_embed("🗑️ DELETE APPLICATION", "👇 **Select the application you want to delete:**", RED, interaction.user, "delete_app"),
+        embed=make_embed(f"{RED_EMOJI} DELETE APPLICATION", "👇 **Select the application you want to delete:**", RED, interaction.user, "delete_app"),
         view=AppActionView(interaction.user.id, "delete_app", apps)
     )
 
@@ -762,7 +761,7 @@ async def create(interaction: discord.Interaction, username: str, password: str,
     
     view = CreateAppView(interaction.user.id, username.strip(), password.strip(), expiry_type.value, days, apps)
     await interaction.response.send_message(
-        embed=make_embed("⚡ HSL Auth Provisioning System", f"**Username:** `{clean(username)}`\n*Select target Application below:*", CYAN, interaction.user, "adduser"),
+        embed=make_embed(f"{RED_EMOJI} HSL Auth Provisioning System", f"**Username:** `{clean(username)}`\n*Select target Application below:*", CYAN, interaction.user, "adduser"),
         view=view
     )
 
@@ -775,7 +774,7 @@ async def show_app_action(interaction, action, username=None):
 
     await interaction.response.send_message(
         embed=make_embed(
-            f"⚡ HSL-CORP • {action.upper()}",
+            f"{RED_EMOJI} HSL-CORP • {action.upper()}",
             f"{f'**Target User:** `{clean(username)}`\n' if username else ''}👇 **STEP 1 — SELECT APPLICATION**",
             RED if action in ("ban", "delete", "deluser") else CYAN,
             interaction.user,

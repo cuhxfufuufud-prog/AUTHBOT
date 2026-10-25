@@ -222,7 +222,7 @@ async def get_app_users(app_token):
 
 
 # =========================================================
-# APP SELECTOR + USER ACTIONS (CLEAN DYNAMIC FLOW)
+# APP SELECTOR + USER ACTIONS
 # =========================================================
 class AppActionSelect(discord.ui.Select):
     def __init__(self, owner_id, action, apps, target_username=None):
@@ -257,6 +257,27 @@ class AppActionSelect(discord.ui.Select):
         app_token = self.values[0]
         app_rows = [row for row in get_apps() if row[1] == app_token]
         app_name = app_rows[0][0] if app_rows else "Selected application"
+
+        # Handle App Deletion directly from dropdown selection
+        if self.action == "delete_app":
+            try:
+                db("DELETE FROM apps WHERE token=?", (app_token,))
+                await interaction.response.edit_message(
+                    embed=make_embed(
+                        "🗑️ APPLICATION DELETED",
+                        f"{TICK_EMOJI} Application **{clean(app_name)}** has been successfully removed from bot registry.",
+                        RED,
+                        interaction.user,
+                        "delete_app"
+                    ),
+                    view=None
+                )
+            except Exception as exc:
+                await interaction.response.edit_message(
+                    embed=make_embed("🔴 ERROR", clean(exc), RED, interaction.user, "delete_app"),
+                    view=None
+                )
+            return
 
         try:
             users = await get_app_users(app_token)
@@ -691,7 +712,7 @@ async def help_command(interaction: discord.Interaction):
     await interaction.response.send_message(
         embed=make_embed(
             "⚡ HSL-CORP • CONTROL PANEL",
-            "**USER ACTIONS**\n`/create` `/list` `/ban` `/unban` `/deluser` `/resethwid`\n\n**APP MANAGEMENT**\n`/add_app` `/apps`",
+            "**USER ACTIONS**\n`/create` `/list` `/ban` `/unban` `/deluser` `/resethwid`\n\n**APP MANAGEMENT**\n`/add_app` `/apps` `/delete_app`",
             RED,
             interaction.user,
             "help"
@@ -714,6 +735,21 @@ async def apps_command(interaction: discord.Interaction):
     apps = get_apps()
     text = "\n".join(f"📦 **{clean(name, 90)}**" for name, token in apps[:25]) or "No apps registered."
     await interaction.response.send_message(embed=make_embed(f"📦 REGISTERED APPS ({len(apps)})", text[:3900], CYAN, interaction.user, "apps"))
+
+
+@bot.tree.command(name="delete_app", description="🗑️ Delete a registered application from bot")
+async def delete_app_cmd(interaction: discord.Interaction):
+    if interaction.user.id != OWNER_ID:
+        return await interaction.response.send_message(embed=make_embed("⛔ OWNER ONLY", "Only owner can delete apps.", RED, interaction.user, "delete_app"), ephemeral=True)
+    
+    apps = get_apps()
+    if not apps:
+        return await interaction.response.send_message(embed=make_embed("📦 NO APPS", "No registered apps found.", YELLOW, interaction.user, "delete_app"), ephemeral=True)
+
+    await interaction.response.send_message(
+        embed=make_embed("🗑️ DELETE APPLICATION", "👇 **Select the application you want to delete:**", RED, interaction.user, "delete_app"),
+        view=AppActionView(interaction.user.id, "delete_app", apps)
+    )
 
 
 @bot.tree.command(name="create", description="🚀 Create a license after selecting an app")

@@ -119,8 +119,6 @@ if os.path.isdir("/data"):
 else:
     DATABASE_PATH = LEGACY_DB_PATH
 
-# Copy the old database only if the persistent DB does not exist.
-# Never overwrite an existing database in /data.
 if (
     DATABASE_PATH != LEGACY_DB_PATH
     and not os.path.exists(DATABASE_PATH)
@@ -170,7 +168,7 @@ def init_db():
         )
     """)
 
-  # Updated tool_users table with per-app composite unique constraint (username + app_token)
+  # Per-App composite unique constraint (username + app_token)
   cur.execute("""
         CREATE TABLE IF NOT EXISTS tool_users (
             id INTEGER PRIMARY KEY AUTOINCREMENT, 
@@ -186,7 +184,6 @@ def init_db():
         )
     """)
 
-  # Safe migration check if existing table had global unique username constraint
   try:
       cur.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='tool_users'")
       table_sql = cur.fetchone()

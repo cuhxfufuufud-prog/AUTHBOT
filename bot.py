@@ -539,7 +539,7 @@ class ConfirmActionView(discord.ui.View):
                 public_desc = f"✅ User `{clean(self.username)}` status updated: `{self.action.upper()}`."
                 public_title = f"🛡️ USER {self.action.upper()}"
             else:
-                public_desc = f"✅ Action `{self.action.upper()` executed for `{clean(self.username)}`."
+                public_desc = f"✅ Action `{self.action.upper()}` executed for `{clean(self.username)}`."
                 public_title = f"🟢 {self.action.upper()} SUCCESS"
 
             public_embed = make_embed(

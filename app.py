@@ -1633,41 +1633,7 @@ def api_auth_login():
 # ==========================================
 
 
-@app.route("/api/bot/users", methods=["GET"])
-def api_bot_get_users():
-  app_token = request.args.get("app_token")
-  
-  if app_token:
-    tool_users = db(
-        "SELECT username, status, hwid, app_token FROM tool_users WHERE app_token=?", (app_token,), fetch=True
-    )
-  else:
-    tool_users = db(
-        "SELECT username, status, hwid, app_token FROM tool_users", fetch=True
-    )
-    
-  users_list = []
-  for u in tool_users:
-    users_list.append({
-        "username": u[0],
-        "status": u[1],
-        "hwid": u[2] if u[2] else "Not Bound",
-        "app_token": u[3],
-    })
-  return jsonify({"status": "success", "users": users_list})
 
-
-@app.route("/api/bot/delete_user", methods=["POST"])
-def api_bot_delete_user():
-  data = request.json or {}
-  username = data.get("username")
-  if not username:
-    return jsonify({"status": "error", "message": "Username missing"}), 400
-
-  db("DELETE FROM tool_users WHERE username=?", (username,))
-  return jsonify(
-      {"status": "success", "message": f"User {username} deleted successfully."}
-  )
 
 
 @app.route("/api/bot/toggle_ban", methods=["POST"])

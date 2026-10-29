@@ -1300,7 +1300,26 @@ def check_limit(email):
 
   return (user_count + key_count) >= 10
 
+@app.route("/api/auth", methods=["POST"])
+def api_auth():
+    data = request.json or {}
+    license_key = data.get("licensekey") or data.get("key") or data.get("username") or data.get("password")
+    
+    if not license_key:
+        return jsonify({"status": "error", "message": "Key missing"}), 400
 
+    # 1. Keys table me check karo (jo bot se generate hoti hain HSL-KEY-...)
+    key_row = db("SELECT key_text, status FROM keys WHERE key_text=?", (license_key,), fetch=True)
+    if key_row:
+        return jsonify({"status": "valid", "message": "Access granted successfully."}), 200
+
+    # 2. Tool users table me bhi check kar lo
+    user_row = db("SELECT username, status FROM tool_users WHERE username=?", (license_key,), fetch=True)
+    if user_row:
+        return jsonify({"status": "valid", "message": "Access granted successfully."}), 200
+
+    return jsonify({"status": "error", "message": "Incorrect credentials"}), 400
+    
 @app.route("/api/create_app", methods=["POST"])
 def api_create_app():
   if "user" not in session:

@@ -993,18 +993,6 @@ async function createKey() {
     if(res.ok) location.reload();
 }
 
-async function deleteKey(keyText) {
-    if(!confirm('Are you sure you want to delete license key ' + keyText + '?')) return;
-    let res = await fetch('/api/delete_key', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({key_text: keyText})
-    });
-    let data = await res.json();
-    alert(data.message);
-    location.reload();
-}
-
 function copyToken() {
     let t = document.getElementById('tokenDisplay').innerText;
     navigator.clipboard.writeText(t);
@@ -1196,10 +1184,9 @@ def dash():
         (
             "<div class='flex justify-between items-center bg-black/80 border"
             " border-white/10 rounded-xl px-4 py-3 mb-2'>"
-            f"<div><span class='font-bold text-white'>{k[1]}</span><br>"
-            f"<span class='text-[10px] {'text-green-400' if k[3] == 'unused' else 'text-red-400'}'>● Status: {k[3]}</span></div>"
-            f"<button onclick=\"deleteKey('{k[1]}')\" class='bg-red-900/50 border border-red-500/30 px-3 py-1.5 rounded-lg text-xs hover:bg-red-800 transition text-red-300 font-semibold'>Delete Key</button>"
-            "</div>"
+            f"<span>{k[1]}</span>"
+            f"<span class='{'text-green-400' if k[3] == 'unused' else 'text-red-400'}'>"
+            f"● {k[3]}</span></div>"
         )
         for k in keys
     ])
@@ -1387,29 +1374,6 @@ def api_create_key():
     return jsonify({"message": f"Key Created: {key_text}", "key": key_text}), 200
   except Exception as e:
     return jsonify({"message": "Could not create key due to a server error."}), 500
-
-
-@app.route("/api/delete_key", methods=["POST"])
-def api_delete_key():
-  if "user" not in session:
-    return jsonify({"error": "Unauthorized"}), 401
-
-  email = session["user"]["email"]
-  key_text = request.json.get("key_text")
-
-  if not key_text:
-    return jsonify({"message": "Key text missing!"}), 400
-
-  key_check = db(
-      "SELECT * FROM keys WHERE key_text=? AND app_token IN (SELECT token FROM apps WHERE owner_email=?)",
-      (key_text, email),
-      True,
-  )
-  if not key_check:
-    return jsonify({"message": "Key not found or unauthorized!"}), 403
-
-  db("DELETE FROM keys WHERE key_text=?", (key_text,))
-  return jsonify({"message": "License key deleted successfully."})
 
 
 @app.route("/api/create_user", methods=["POST"])
@@ -1706,25 +1670,6 @@ def api_bot_reset_hwid():
       "status": "success",
       "message": f"HWID reset successfully for {username}.",
   })
-
-
-@app.route("/api/bot/create_key", methods=["POST"])
-def api_bot_create_key():
-    data = request.json or {}
-    app_token = data.get("app_token")
-    if not app_token:
-        return jsonify({"status": "error", "message": "App token missing"}), 400
-    
-    random_key_part = "".join(random.choices(string.ascii_uppercase + string.digits, k=16))
-    key_text = f"HSL-KEY-{random_key_part}"
-    try:
-        db(
-            "INSERT INTO keys (key_text, app_token, status, created_at) VALUES (?,?,?,?)",
-            (key_text, app_token, "unused", datetime.now(timezone.utc).isoformat(timespec="seconds")),
-        )
-        return jsonify({"status": "success", "message": f"Key Created: {key_text}", "key": key_text}), 200
-    except Exception as e:
-        return jsonify({"status": "error", "message": "Could not create key."}), 500
 
 
 @app.route("/logout")

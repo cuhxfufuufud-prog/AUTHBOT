@@ -220,8 +220,39 @@ async def get_app_users(app_token):
     return users
 
 
+async def get_app_keys(app_token):
+    response = await api(
+        "GET",
+        "/api/bot/keys",
+        params={"app_token": app_token}
+    )
+
+    payload = parse_api_response(response)
+
+    if response.status_code != 200:
+        raise RuntimeError(
+            f"Keys API HTTP {response.status_code}: "
+            f"{payload.get('message', response.text[:300])}"
+        )
+
+    keys_data = payload.get("keys", payload.get("data", []))
+    if not isinstance(keys_data, list):
+        keys_data = []
+
+    parsed_keys = []
+    for k in keys_data:
+        if isinstance(k, dict):
+            key_str = k.get("key") or k.get("license_key") or k.get("name") or str(k)
+            status = k.get("status", "unused")
+            parsed_keys.append({"key": key_str, "status": status})
+        else:
+            parsed_keys.append({"key": str(k), "status": "unused"})
+
+    return parsed_keys
+
+
 # =========================================================
-# APP SELECTOR + USER ACTIONS
+# APP SELECTOR + USER/KEY ACTIONS
 # =========================================================
 class AppActionSelect(discord.ui.Select):
     def __init__(self, owner_id, action, apps, target_username=None):
@@ -281,6 +312,49 @@ class AppActionSelect(discord.ui.Select):
                     view=None
                 )
             return
+
+        if self.action == "deletekey":
+            try:
+                keys = await get_app_keys(app_token)
+            except Exception as exc:
+                return await interaction.response.edit_message(
+                    embed=make_embed(
+                        "🔴 APP KEYS API ERROR",
+                        f"{clean(exc, 1200)}",
+                        RED
+                    ),
+                    view=None
+                )
+
+            if not keys:
+                return await interaction.response.edit_message(
+                    embed=make_embed(
+                        "NO KEYS",
+                        f"No license keys found for **{clean(app_name)}**.",
+                        YELLOW,
+                        interaction.user,
+                        self.action
+                    ),
+                    view=None
+                )
+
+            return await interaction.response.edit_message(
+                embed=make_embed(
+                    f"DELETEKEY • {clean(app_name)}",
+                    f"**Application:** `{clean(app_name)}`\n"
+                    f"**Keys:** `{len(keys)}`\n\n"
+                    "👇 **STEP 2 — SELECT LICENSE KEY**",
+                    RED,
+                    interaction.user,
+                    self.action
+                ),
+                view=KeySelectView(
+                    self.owner_id,
+                    app_name,
+                    app_token,
+                    keys
+                )
+            )
 
         try:
             users = await get_app_users(app_token)
@@ -373,7 +447,7 @@ class AppActionSelect(discord.ui.Select):
                 f"**Application:** `{clean(app_name)}`\n"
                 f"**Users:** `{len(users)}`\n\n"
                 "👇 **STEP 1 — SELECT APPLICATION**",
-                RED if self.action in ("ban", "delete", "deletekey") else CYAN,
+                RED if self.action in ("ban", "delete") else CYAN,
                 interaction.user,
                 self.action
             ),
@@ -428,7 +502,7 @@ class UserSelect(discord.ui.Select):
             ]
 
         super().__init__(
-            placeholder="👤 STEP 2 — SELECT USERNAME / KEY",
+            placeholder="👤 STEP 2 — SELECT USERNAME",
             min_values=1,
             max_values=1,
             options=options
@@ -450,8 +524,8 @@ class UserSelect(discord.ui.Select):
                 "CONFIRM ACTION",
                 f"**Application:** `{clean(self.app_name)}`\n"
                 f"**Action:** `{self.action.upper()}`\n"
-                f"**Target:** `{clean(username)}`\n\n"
-                "Confirm only if the app and target are correct.",
+                f"**Username:** `{clean(username)}`\n\n"
+                "Confirm only if the app and username are correct.",
                 RED,
                 interaction.user,
                 self.action
@@ -471,6 +545,83 @@ class UserSelectView(discord.ui.View):
         super().__init__(timeout=120)
         self.owner_id = owner_id
         self.add_item(UserSelect(owner_id, action, app_name, app_token, users))
+
+
+class KeySelect(discord.ui.Select):
+    def __init__(self, owner_id, app_name, app_token, keys):
+        self.owner_id = owner_id
+        self.app_name = app_name
+        self.app_token = app_token
+
+        options = []
+        for k in keys[:25]:
+            key_str = str(k.get("key", ""))
+            status = str(k.get("status", "unused"))
+            if key_str:
+                opt_emoji = "🔑" if status.lower() == "unused" else "🔴"
+                options.append(
+                    discord.SelectOption(
+                        label=key_str[:100],
+                        value=key_str[:100],
+                        description=f"Status: {status}"[:100],
+                        emoji=opt_emoji
+                    )
+                )
+
+        if not options:
+            options = [
+                discord.SelectOption(
+                    label="No selectable keys",
+                    value="__none__",
+                    description="No license keys were returned",
+                    emoji="⚠️"
+                )
+            ]
+
+        super().__init__(
+            placeholder="🔑 STEP 2 — SELECT LICENSE KEY",
+            min_values=1,
+            max_values=1,
+            options=options
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.owner_id and not is_allowed(interaction.user.id, "deletekey"):
+            return await interaction.response.send_message(
+                "❌ You don't have permission to use this menu.",
+                ephemeral=True
+            )
+
+        key_value = self.values[0]
+        if key_value == "__none__":
+            return await interaction.response.send_message("No key selected.", ephemeral=True)
+
+        await interaction.response.edit_message(
+            embed=make_embed(
+                "CONFIRM ACTION",
+                f"**Application:** `{clean(self.app_name)}`\n"
+                f"**Action:** `DELETEKEY`\n"
+                f"**Key:** `{clean(key_value)}`\n\n"
+                "Confirm only if the app and license key are correct.",
+                RED,
+                interaction.user,
+                "deletekey"
+            ),
+            view=ConfirmActionView(
+                self.owner_id,
+                "deletekey",
+                self.app_name,
+                self.app_token,
+                key_value
+            )
+        )
+
+
+class KeySelectView(discord.ui.View):
+    def __init__(self, owner_id, app_name, app_token, keys):
+        super().__init__(timeout=120)
+        self.owner_id = owner_id
+        self.add_item(KeySelect(owner_id, app_name, app_token, keys))
 
 
 class ConfirmActionView(discord.ui.View):
@@ -495,7 +646,7 @@ class ConfirmActionView(discord.ui.View):
             "ban": "/api/bot/toggle_ban",
             "unban": "/api/bot/toggle_ban",
             "delete": "/api/bot/delete_user",
-            "deletekey": "/api/bot/delete_user",
+            "deletekey": "/api/bot/delete_key",
             "resethwid": "/api/bot/reset_hwid"
         }
 
@@ -532,11 +683,15 @@ class ConfirmActionView(discord.ui.View):
             )
             await asyncio.sleep(delay)
 
+        req_json = {"username": self.username, "app_token": self.app_token}
+        if self.action == "deletekey":
+            req_json = {"key": self.username, "app_token": self.app_token}
+
         try:
             response = await api(
                 "POST",
                 paths[self.action],
-                json={"username": self.username, "app_token": self.app_token}
+                json=req_json
             )
             payload = parse_api_response(response)
             message = str(payload.get("message", payload.get("error", "No message returned.")))
@@ -945,7 +1100,7 @@ async def delete_user(interaction: discord.Interaction, username: str = None):
     await show_app_action(interaction, "delete", username)
 
 
-@bot.tree.command(name="deletekey", description="🗑️ Select app then key/user to delete")
+@bot.tree.command(name="deletekey", description="🗑️ Select app then license key to delete")
 async def delete_key_cmd(interaction: discord.Interaction, username: str = None):
     await show_app_action(interaction, "deletekey", username)
 

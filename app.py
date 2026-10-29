@@ -1744,9 +1744,7 @@ def api_bot_get_users():
   return jsonify({"status": "success", "users": users_list})
 
 
-@app.route("/api/bot/keys", methods=["GET"])
-def api_bot_get_keys():
-  app_token = request.args.get("app_token")
+
   
   if app_token:
     keys_rows = db(

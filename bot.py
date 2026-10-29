@@ -373,7 +373,7 @@ class AppActionSelect(discord.ui.Select):
                 f"**Application:** `{clean(app_name)}`\n"
                 f"**Users:** `{len(users)}`\n\n"
                 "👇 **STEP 1 — SELECT APPLICATION**",
-                RED if self.action in ("ban", "delete") else CYAN,
+                RED if self.action in ("ban", "delete", "deletekey") else CYAN,
                 interaction.user,
                 self.action
             ),
@@ -428,7 +428,7 @@ class UserSelect(discord.ui.Select):
             ]
 
         super().__init__(
-            placeholder="👤 STEP 2 — SELECT USERNAME",
+            placeholder="👤 STEP 2 — SELECT USERNAME / KEY",
             min_values=1,
             max_values=1,
             options=options
@@ -450,8 +450,8 @@ class UserSelect(discord.ui.Select):
                 "CONFIRM ACTION",
                 f"**Application:** `{clean(self.app_name)}`\n"
                 f"**Action:** `{self.action.upper()}`\n"
-                f"**Username:** `{clean(username)}`\n\n"
-                "Confirm only if the app and username are correct.",
+                f"**Target:** `{clean(username)}`\n\n"
+                "Confirm only if the app and target are correct.",
                 RED,
                 interaction.user,
                 self.action
@@ -495,6 +495,7 @@ class ConfirmActionView(discord.ui.View):
             "ban": "/api/bot/toggle_ban",
             "unban": "/api/bot/toggle_ban",
             "delete": "/api/bot/delete_user",
+            "deletekey": "/api/bot/delete_user",
             "resethwid": "/api/bot/reset_hwid"
         }
 
@@ -509,7 +510,7 @@ class ConfirmActionView(discord.ui.View):
             embed=make_embed(
                 f"PROCESSING {action_title}...",
                 f"```ansi\n\x1b[1;36m🔄 Executing {action_title} Protocol...\x1b[0m\n```\n"
-                f"» **Target User:** `{clean(self.username)}`\n» **App:** `{clean(self.app_name)}`\n\n{stages[0][0]}",
+                f"» **Target:** `{clean(self.username)}`\n» **App:** `{clean(self.app_name)}`\n\n{stages[0][0]}",
                 CYAN,
                 interaction.user,
                 self.action
@@ -523,7 +524,7 @@ class ConfirmActionView(discord.ui.View):
                 embed=make_embed(
                     f"PROCESSING {action_title}...",
                     f"```ansi\n\x1b[1;36m🔄 Executing {action_title} Protocol...\x1b[0m\n```\n"
-                    f"» **Target User:** `{clean(self.username)}`\n» **App:** `{clean(self.app_name)}`\n\n{bar_text}",
+                    f"» **Target:** `{clean(self.username)}`\n» **App:** `{clean(self.app_name)}`\n\n{bar_text}",
                     CYAN,
                     interaction.user,
                     self.action
@@ -545,7 +546,7 @@ class ConfirmActionView(discord.ui.View):
                     embed=make_embed("🔴 ACTION FAILED", f"HTTP `{response.status_code}`\n```{message[:900]}```", RED, interaction.user, self.action)
                 )
 
-            if self.action == "delete":
+            if self.action in ("delete", "deletekey"):
                 public_desc = f"Key / User `{clean(self.username)}` permanently deleted from vault."
                 public_title = "LICENSE KEY DELETED"
             elif self.action == "resethwid":
@@ -561,12 +562,12 @@ class ConfirmActionView(discord.ui.View):
             success_embed = make_embed(
                 public_title,
                 public_desc,
-                RED if self.action in ("ban", "delete") else GREEN,
+                RED if self.action in ("ban", "delete", "deletekey") else GREEN,
                 interaction.user,
                 self.action
             )
             await interaction.edit_original_response(embed=success_embed)
-            await audit(f"**Action:** `{self.action.upper()}`\n**App:** `{clean(self.app_name)}`\n**Username:** `{clean(self.username)}`", GREEN)
+            await audit(f"**Action:** `{self.action.upper()}`\n**App:** `{clean(self.app_name)}`\n**Target:** `{clean(self.username)}`", GREEN)
 
         except Exception as exc:
             await interaction.edit_original_response(
@@ -793,7 +794,7 @@ async def help_command(interaction: discord.Interaction):
     await interaction.response.send_message(
         embed=make_embed(
             "HSL-CORP • CONTROL PANEL",
-            "**USER ACTIONS**\n`/create` `/createkey` `/list` `/ban` `/unban` `/deluser` `/resethwid`\n\n**APP MANAGEMENT**\n`/add_app` `/apps` `/delete_app`\n\n**WHITELIST ADMIN**\n`/whitelist` `/unwhitelist` `/whitelist_info`",
+            "**USER ACTIONS**\n`/create` `/createkey` `/list` `/ban` `/unban` `/deluser` `/deletekey` `/resethwid`\n\n**APP MANAGEMENT**\n`/add_app` `/apps` `/delete_app`\n\n**WHITELIST ADMIN**\n`/whitelist` `/unwhitelist` `/whitelist_info`",
             RED,
             interaction.user,
             "help"
@@ -910,13 +911,13 @@ async def show_app_action(interaction, action, username=None):
     if not apps:
         return await interaction.response.send_message(embed=make_embed("📦 NO APPS", "No apps found.", YELLOW, interaction.user, action), ephemeral=True)
 
-    sub_text = f"**Target User:** `{clean(username)}`\n" if username else ""
+    sub_text = f"**Target:** `{clean(username)}`\n" if username else ""
 
     await interaction.response.send_message(
         embed=make_embed(
             f"{action.upper()} • SELECT APPLICATION",
             f"{sub_text}Please choose which application belongs to:\n\n👇 **STEP 1 — SELECT APPLICATION**",
-            RED if action in ("ban", "delete", "deluser") else CYAN,
+            RED if action in ("ban", "delete", "deletekey", "deluser") else CYAN,
             interaction.user,
             action
         ),
@@ -942,6 +943,11 @@ async def unban(interaction: discord.Interaction, username: str = None):
 @bot.tree.command(name="deluser", description="🗑️ Permanently delete a client user account")
 async def delete_user(interaction: discord.Interaction, username: str = None):
     await show_app_action(interaction, "delete", username)
+
+
+@bot.tree.command(name="deletekey", description="🗑️ Select app then key/user to delete")
+async def delete_key_cmd(interaction: discord.Interaction, username: str = None):
+    await show_app_action(interaction, "deletekey", username)
 
 
 @bot.tree.command(name="resethwid", description="🔄 Reset HWID for a user")

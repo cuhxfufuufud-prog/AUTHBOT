@@ -1548,18 +1548,21 @@ def send_login_log(username, status_msg, hwid, ip_addr):
     current_time = int(time.time())
     timestamp_str = f"<t:{current_time}:F> (<t:{current_time}:R>)"
     
-    if status_msg == "valid":
+    # Normalize status_msg to lowercase to avoid case mismatch issues
+    status_lower = str(status_msg).lower()
+    
+    if status_lower == "valid" or status_lower == "success":
         color = 0x2ECC71
         status_badge = "🟢 `SUCCESS / AUTHENTICATED`"
-    elif "HWID Bound" in status_msg:
+    elif "hwid bound" in status_lower:
         color = 0x3498DB
         status_badge = "🔵 `NEW DEVICE BOUND`"
-    elif status_msg == "hwid_mismatch":
+    elif status_lower == "hwid_mismatch":
         color = 0xE67E22
         status_badge = "🟠 `HWID MISMATCH DETECTED`"
     else:
         color = 0xE74C3C
-        status_badge = f"🔴 `FAILED ({status_msg.upper()})`"
+        status_badge = f"🔴 `FAILED ({str(status_msg).upper()})`"
 
     payload = {
         "username": "HSL AUTH BOT",
@@ -1582,6 +1585,8 @@ def send_login_log(username, status_msg, hwid, ip_addr):
             }
         }]
     }
+    
+    # Add your requests.post code here to send the payload to Discord webhook
     
     try:
         requests.post(DISCORD_LOG_WEBHOOK_URL, json=payload, timeout=3)

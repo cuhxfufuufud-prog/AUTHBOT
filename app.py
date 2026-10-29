@@ -1711,28 +1711,7 @@ def api_bot_reset_hwid():
 # DISCORD BOT INTEGRATION API ENDPOINTS (FIXED & KEYS ROUTE ADDED)
 # ==========================================
 
-@app.route("/api/bot/users", methods=["GET"])
-def api_bot_get_users():
-  app_token = request.args.get("app_token")
-  
-  if app_token:
-    tool_users = db(
-        "SELECT username, status, hwid, app_token FROM tool_users WHERE app_token=?", (app_token,), fetch=True
-    )
-  else:
-    tool_users = db(
-        "SELECT username, status, hwid, app_token FROM tool_users", fetch=True
-    )
-    
-  users_list = []
-  for u in tool_users:
-    users_list.append({
-        "username": u[0],
-        "status": u[1],
-        "hwid": u[2] if u[2] else "Not Bound",
-        "app_token": u[3],
-    })
-  return jsonify({"status": "success", "users": users_list})
+
 
 
 @app.route("/api/bot/keys", methods=["GET"])

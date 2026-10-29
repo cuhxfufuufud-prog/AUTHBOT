@@ -220,6 +220,37 @@ async def get_app_users(app_token):
     return users
 
 
+async def get_app_keys(app_token):
+    response = await api(
+        "GET",
+        "/api/bot/keys",
+        params={"app_token": app_token}
+    )
+
+    payload = parse_api_response(response)
+
+    if response.status_code != 200:
+        raise RuntimeError(
+            f"Keys API HTTP {response.status_code}: "
+            f"{payload.get('message', response.text[:300])}"
+        )
+
+    keys = payload.get("keys", [])
+    if not isinstance(keys, list):
+        keys = []
+
+    formatted_keys = []
+    for k in keys:
+        if isinstance(k, dict):
+            k_str = k.get("key") or k.get("license_key") or k.get("name") or str(k)
+            status = k.get("status", "unused")
+            formatted_keys.append({"username": k_str, "status": status})
+        else:
+            formatted_keys.append({"username": str(k), "status": "unused"})
+
+    return formatted_keys
+
+
 # =========================================================
 # APP SELECTOR + USER/KEY ACTIONS
 # =========================================================
@@ -258,6 +289,8 @@ class AppActionSelect(discord.ui.Select):
                 ephemeral=True
             )
 
+        await interaction.response.defer()
+
         app_token = self.values[0]
         app_rows = [row for row in get_apps() if row[1] == app_token]
         app_name = app_rows[0][0] if app_rows else "Selected application"
@@ -265,7 +298,7 @@ class AppActionSelect(discord.ui.Select):
         if self.action == "delete_app":
             try:
                 db("DELETE FROM apps WHERE token=?", (app_token,))
-                await interaction.response.edit_message(
+                await interaction.edit_original_response(
                     embed=make_embed(
                         "APPLICATION DELETED",
                         f"Application **{clean(app_name)}** has been successfully removed from bot registry.",
@@ -276,18 +309,21 @@ class AppActionSelect(discord.ui.Select):
                     view=None
                 )
             except Exception as exc:
-                await interaction.response.edit_message(
+                await interaction.edit_original_response(
                     embed=make_embed("🔴 ERROR", clean(exc), RED, interaction.user, "delete_app"),
                     view=None
                 )
             return
 
         try:
-            users = await get_app_users(app_token)
+            if self.action == "deletekey":
+                users = await get_app_keys(app_token)
+            else:
+                users = await get_app_users(app_token)
         except Exception as exc:
-            return await interaction.response.edit_message(
+            return await interaction.edit_original_response(
                 embed=make_embed(
-                    "🔴 APP USERS API ERROR",
+                    "🔴 API ERROR",
                     f"{clean(exc, 1200)}",
                     RED
                 ),
@@ -307,7 +343,7 @@ class AppActionSelect(discord.ui.Select):
                     f"HWID `{clean(hwid[:12])}`"
                 )
 
-            return await interaction.response.edit_message(
+            return await interaction.edit_original_response(
                 embed=make_embed(
                     f"{clean(app_name)} • USERS ({len(users)})",
                     "\n".join(lines)[:3900] or "No users returned for this app.",
@@ -324,10 +360,10 @@ class AppActionSelect(discord.ui.Select):
                 None
             )
             if not matched_user:
-                return await interaction.response.edit_message(
+                return await interaction.edit_original_response(
                     embed=make_embed(
-                        "🔴 USER NOT FOUND",
-                        f"User `{clean(self.target_username)}` not found in **{clean(app_name)}**.",
+                        "🔴 NOT FOUND",
+                        f"Item `{clean(self.target_username)}` not found in **{clean(app_name)}**.",
                         RED,
                         interaction.user,
                         self.action
@@ -335,13 +371,13 @@ class AppActionSelect(discord.ui.Select):
                     view=None
                 )
             
-            return await interaction.response.edit_message(
+            return await interaction.edit_original_response(
                 embed=make_embed(
                     "CONFIRM ACTION",
                     f"**Application:** `{clean(app_name)}`\n"
                     f"**Action:** `{self.action.upper()}`\n"
-                    f"**Username:** `{clean(self.target_username)}`\n\n"
-                    "Confirm only if the app and username are correct.",
+                    f"**Target:** `{clean(self.target_username)}`\n\n"
+                    "Confirm only if the app and target are correct.",
                     RED,
                     interaction.user,
                     self.action
@@ -356,10 +392,10 @@ class AppActionSelect(discord.ui.Select):
             )
 
         if not users:
-            return await interaction.response.edit_message(
+            return await interaction.edit_original_response(
                 embed=make_embed(
-                    "NO USERS",
-                    f"No accounts returned for **{clean(app_name)}**.",
+                    "NO ITEMS FOUND",
+                    f"No items found for **{clean(app_name)}**.",
                     YELLOW,
                     interaction.user,
                     self.action
@@ -367,11 +403,11 @@ class AppActionSelect(discord.ui.Select):
                 view=None
             )
 
-        await interaction.response.edit_message(
+        await interaction.edit_original_response(
             embed=make_embed(
                 f"{self.action.upper()} • {clean(app_name)}",
                 f"**Application:** `{clean(app_name)}`\n"
-                f"**Users:** `{len(users)}`\n\n"
+                f"**Items:** `{len(users)}`\n\n"
                 "👇 **STEP 1 — SELECT APPLICATION**",
                 RED if self.action in ("ban", "delete", "deletekey") else CYAN,
                 interaction.user,
@@ -403,7 +439,7 @@ class UserSelect(discord.ui.Select):
 
         options = []
         for user in users[:25]:
-            username = str(user.get("username", user.get("key", "")))
+            username = str(user.get("username", ""))
             if username:
                 status = str(user.get("status", "unused"))
                 opt_emoji = "🔑" if action == "deletekey" else ("🟢" if status.lower() == "active" else "🔴")
@@ -442,11 +478,13 @@ class UserSelect(discord.ui.Select):
                 ephemeral=True
             )
 
+        await interaction.response.defer()
+
         username = self.values[0]
         if username == "__none__":
-            return await interaction.response.send_message("No item selected.", ephemeral=True)
+            return await interaction.followup.send("No item selected.", ephemeral=True)
 
-        await interaction.response.edit_message(
+        await interaction.edit_original_response(
             embed=make_embed(
                 "CONFIRM ACTION",
                 f"**Application:** `{clean(self.app_name)}`\n"
@@ -492,13 +530,19 @@ class ConfirmActionView(discord.ui.View):
     @discord.ui.button(label="CONFIRM", emoji="⚡", style=discord.ButtonStyle.danger)
     async def confirm(self, interaction: discord.Interaction, button):
         action_title = self.action.upper()
-        paths = {
-            "ban": "/api/bot/toggle_ban",
-            "unban": "/api/bot/toggle_ban",
-            "delete": "/api/bot/delete_user",
-            "deletekey": "/api/bot/delete_user",
-            "resethwid": "/api/bot/reset_hwid"
-        }
+        
+        if self.action == "deletekey":
+            path = "/api/bot/delete_key"
+            payload_data = {"key": self.username, "app_token": self.app_token}
+        else:
+            paths = {
+                "ban": "/api/bot/toggle_ban",
+                "unban": "/api/bot/toggle_ban",
+                "delete": "/api/bot/delete_user",
+                "resethwid": "/api/bot/reset_hwid"
+            }
+            path = paths.get(self.action, "/api/bot/delete_user")
+            payload_data = {"username": self.username, "app_token": self.app_token}
 
         stages = [
             ("`[ █░░░░░░░░░ ] 10% • Initializing Secure Handshake`", 0.4),
@@ -536,8 +580,8 @@ class ConfirmActionView(discord.ui.View):
         try:
             response = await api(
                 "POST",
-                paths[self.action],
-                json={"username": self.username, "app_token": self.app_token}
+                path,
+                json=payload_data
             )
             payload = parse_api_response(response)
             message = str(payload.get("message", payload.get("error", "No message returned.")))
@@ -548,8 +592,8 @@ class ConfirmActionView(discord.ui.View):
                 )
 
             if self.action in ("delete", "deletekey"):
-                public_desc = f"Key / User `{clean(self.username)}` permanently deleted from vault."
-                public_title = "LICENSE KEY DELETED"
+                public_desc = f"Key / Item `{clean(self.username)}` permanently deleted from vault."
+                public_title = "LICENSE KEY DELETED" if self.action == "deletekey" else "USER DELETED"
             elif self.action == "resethwid":
                 public_desc = f"HWID for user `{clean(self.username)}` has been successfully reset."
                 public_title = "HWID RESET SUCCESSFUL"
@@ -616,6 +660,8 @@ class CreateAppSelect(discord.ui.Select):
         if interaction.user.id != self.owner_id and not is_allowed(interaction.user.id, "create"):
             return await interaction.response.send_message("❌ Unauthorized.", ephemeral=True)
 
+        await interaction.response.defer()
+
         app_token = self.values[0]
         create_stages = [
             ("`[ █░░░░░░░░░ ] 10% • Initializing Secure Handshake`", 0.4),
@@ -624,7 +670,7 @@ class CreateAppSelect(discord.ui.Select):
             ("`[ ██████████ ] 100% • Provisioning Complete`", 0.3)
         ]
 
-        await interaction.response.edit_message(
+        await interaction.edit_original_response(
             embed=make_embed(
                 "PROVISIONING CLIENT ACCOUNT..",
                 f"```ansi\n\x1b[1;36m🔄 Creating Zero-Leak Credentials...\x1b[0m\n```\n"
@@ -730,11 +776,13 @@ class CreateKeyAppSelect(discord.ui.Select):
         if interaction.user.id != self.owner_id and not is_allowed(interaction.user.id, "createkey"):
             return await interaction.response.send_message("❌ Unauthorized.", ephemeral=True)
 
+        await interaction.response.defer()
+
         app_token = self.values[0]
         app_rows = [row for row in get_apps() if row[1] == app_token]
         app_name = app_rows[0][0] if app_rows else "Selected application"
 
-        await interaction.response.edit_message(
+        await interaction.edit_original_response(
             embed=make_embed("GENERATING LICENSE KEY...", "Creating new license key...", CYAN, interaction.user, "createkey"),
             view=None
         )
@@ -946,7 +994,7 @@ async def delete_user(interaction: discord.Interaction, username: str = None):
     await show_app_action(interaction, "delete", username)
 
 
-@bot.tree.command(name="deletekey", description="🗑️ Select app then key/user to delete")
+@bot.tree.command(name="deletekey", description="🗑️ Select app then license key to delete")
 async def delete_key_cmd(interaction: discord.Interaction, username: str = None):
     await show_app_action(interaction, "deletekey", username)
 

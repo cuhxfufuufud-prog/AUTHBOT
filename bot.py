@@ -665,7 +665,7 @@ class CreateAppSelect(discord.ui.Select):
                 generated_key = data.get("key") or data.get("license_key") or data.get("generated_key")
 
                 public_description = (
-                    f"RED_EMOJI **CLIENT ACCOUNT CREATED**\n"
+                    f"{RED_EMOJI} **CLIENT ACCOUNT CREATED**\n"
                     f"**User** `{clean(self.username)}` **Created for HSL AUTH**\n\n"
                     f"» **Password:** `{clean(self.password)}`\n"
                     f"» **Subscription:** `default`\n"

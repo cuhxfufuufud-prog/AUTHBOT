@@ -703,6 +703,72 @@ class CreateAppView(discord.ui.View):
 
 
 # =========================================================
+# CREATE LICENSE KEY SELECTOR & VIEW (NEW ADDITION)
+# =========================================================
+class CreateKeyAppSelect(discord.ui.Select):
+    def __init__(self, owner_id, apps):
+        self.owner_id = owner_id
+        try:
+            dropdown_emoji = discord.PartialEmoji.from_str(RED_EMOJI)
+        except Exception:
+            dropdown_emoji = "🔑"
+
+        options = [
+            discord.SelectOption(
+                label=str(name)[:100],
+                value=str(token),
+                description="Generate license key for this app",
+                emoji=dropdown_emoji
+            )
+            for name, token in apps[:25]
+        ]
+        super().__init__(placeholder="🔑 SELECT APP FOR LICENSE KEY", min_values=1, max_values=1, options=options)
+
+    async def callback(self, interaction: discord.Interaction):
+        if interaction.user.id != self.owner_id and not is_allowed(interaction.user.id, "createkey"):
+            return await interaction.response.send_message("❌ Unauthorized.", ephemeral=True)
+
+        app_token = self.values[0]
+        app_rows = [row for row in get_apps() if row[1] == app_token]
+        app_name = app_rows[0][0] if app_rows else "Selected application"
+
+        await interaction.response.edit_message(
+            embed=make_embed("GENERATING LICENSE KEY...", "Creating new license key...", CYAN, interaction.user, "createkey"),
+            view=None
+        )
+
+        try:
+            response = await api("POST", "/api/bot/create_key", json={"app_token": app_token})
+            payload = parse_api_response(response)
+            message = str(payload.get("message", payload.get("error", "No message returned.")))
+            key_text = payload.get("key")
+
+            if response.status_code == 200 and key_text:
+                success_embed = make_embed(
+                    "🔑 LICENSE KEY GENERATED",
+                    f"**Application:** `{clean(app_name)}`\n\n» **License Key:** `{clean(key_text)}`\n» **Status:** `unused`",
+                    GREEN,
+                    interaction.user,
+                    "createkey"
+                )
+                await interaction.edit_original_response(embed=success_embed)
+                await audit(f"**License Key Generated**\n**App:** `{clean(app_name)}`\n**Key:** `{clean(key_text)}`", GREEN)
+            else:
+                await interaction.edit_original_response(
+                    embed=make_embed("🔴 KEY GENERATION FAILED", f"HTTP `{response.status_code}`\n```{message[:1000]}```", RED, interaction.user, "createkey")
+                )
+        except Exception as exc:
+            await interaction.edit_original_response(embed=make_embed("🔴 API ERROR", clean(exc, 1000), RED, interaction.user, "createkey"))
+
+
+class CreateKeyAppView(discord.ui.View):
+    def __init__(self, owner_id, apps):
+        super().__init__(timeout=120)
+        self.owner_id = owner_id
+        self.add_item(CreateKeyAppSelect(owner_id, apps))
+
+
+# =========================================================
 # BOT EVENTS & COMMAND REGISTRATION
 # =========================================================
 @bot.event
@@ -727,7 +793,7 @@ async def help_command(interaction: discord.Interaction):
     await interaction.response.send_message(
         embed=make_embed(
             "HSL-CORP • CONTROL PANEL",
-            "**USER ACTIONS**\n`/create` `/list` `/ban` `/unban` `/deluser` `/resethwid`\n\n**APP MANAGEMENT**\n`/add_app` `/apps` `/delete_app`\n\n**WHITELIST ADMIN**\n`/whitelist` `/unwhitelist` `/whitelist_info`",
+            "**USER ACTIONS**\n`/create` `/createkey` `/list` `/ban` `/unban` `/deluser` `/resethwid`\n\n**APP MANAGEMENT**\n`/add_app` `/apps` `/delete_app`\n\n**WHITELIST ADMIN**\n`/whitelist` `/unwhitelist` `/whitelist_info`",
             RED,
             interaction.user,
             "help"
@@ -820,6 +886,20 @@ async def create(interaction: discord.Interaction, username: str, password: str,
     view = CreateAppView(interaction.user.id, username.strip(), password.strip(), expiry_type.value, days, apps)
     await interaction.response.send_message(
         embed=make_embed("HSL Auth Provisioning System", f"**Username:** `{clean(username)}`\n*Select target Application below:*", CYAN, interaction.user, "create"),
+        view=view
+    )
+
+
+@bot.tree.command(name="createkey", description="🔑 Generate a license key after selecting an app")
+async def createkey(interaction: discord.Interaction):
+    if await deny(interaction, "createkey"): return
+    apps = get_apps()
+    if not apps:
+        return await interaction.response.send_message(embed=make_embed("📦 NO APPS", "Register an app first.", YELLOW, interaction.user, "createkey"), ephemeral=True)
+    
+    view = CreateKeyAppView(interaction.user.id, apps)
+    await interaction.response.send_message(
+        embed=make_embed("HSL Auth Key Generator", "Select target Application below to generate a new license key:\n\n👇 **SELECT APPLICATION**", CYAN, interaction.user, "createkey"),
         view=view
     )
 

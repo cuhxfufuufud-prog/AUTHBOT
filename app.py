@@ -1707,6 +1707,145 @@ def api_bot_reset_hwid():
       "message": f"HWID reset successfully for {username}.",
   })
 
+# ==========================================
+# DISCORD BOT INTEGRATION API ENDPOINTS (FIXED & KEYS ROUTE ADDED)
+# ==========================================
+
+@app.route("/api/bot/users", methods=["GET"])
+def api_bot_get_users():
+  app_token = request.args.get("app_token")
+  
+  if app_token:
+    tool_users = db(
+        "SELECT username, status, hwid, app_token FROM tool_users WHERE app_token=?", (app_token,), fetch=True
+    )
+  else:
+    tool_users = db(
+        "SELECT username, status, hwid, app_token FROM tool_users", fetch=True
+    )
+    
+  users_list = []
+  for u in tool_users:
+    users_list.append({
+        "username": u[0],
+        "status": u[1],
+        "hwid": u[2] if u[2] else "Not Bound",
+        "app_token": u[3],
+    })
+  return jsonify({"status": "success", "users": users_list})
+
+
+@app.route("/api/bot/keys", methods=["GET"])
+def api_bot_get_keys():
+  app_token = request.args.get("app_token")
+  
+  if app_token:
+    keys_rows = db(
+        "SELECT key_text, status, app_token FROM keys WHERE app_token=?", (app_token,), fetch=True
+    )
+  else:
+    keys_rows = db(
+        "SELECT key_text, status, app_token FROM keys", fetch=True
+    )
+    
+  keys_list = []
+  for k in keys_rows:
+    keys_list.append({
+        "key": k[0],
+        "status": k[1],
+        "app_token": k[2],
+    })
+  return jsonify({"status": "success", "keys": keys_list})
+
+
+@app.route("/api/bot/delete_user", methods=["POST"])
+def api_bot_delete_user():
+  data = request.json or {}
+  username = data.get("username")
+  if not username:
+    return jsonify({"status": "error", "message": "Username missing"}), 400
+
+  db("DELETE FROM tool_users WHERE username=?", (username,))
+  return jsonify(
+      {"status": "success", "message": f"User {username} deleted successfully."}
+  )
+
+
+# ==========================================
+# DISCORD BOT INTEGRATION API ENDPOINTS (FIXED & KEYS ROUTE ADDED)
+# ==========================================
+
+@app.route("/api/bot/users", methods=["GET"])
+def api_bot_get_users():
+  app_token = request.args.get("app_token")
+  
+  if app_token:
+    tool_users = db(
+        "SELECT username, status, hwid, app_token FROM tool_users WHERE app_token=?", (app_token,), fetch=True
+    )
+  else:
+    tool_users = db(
+        "SELECT username, status, hwid, app_token FROM tool_users", fetch=True
+    )
+    
+  users_list = []
+  for u in tool_users:
+    users_list.append({
+        "username": u[0],
+        "status": u[1],
+        "hwid": u[2] if u[2] else "Not Bound",
+        "app_token": u[3],
+    })
+  return jsonify({"status": "success", "users": users_list})
+
+
+@app.route("/api/bot/keys", methods=["GET"])
+def api_bot_get_keys():
+  app_token = request.args.get("app_token")
+  
+  if app_token:
+    keys_rows = db(
+        "SELECT key_text, status, app_token FROM keys WHERE app_token=?", (app_token,), fetch=True
+    )
+  else:
+    keys_rows = db(
+        "SELECT key_text, status, app_token FROM keys", fetch=True
+    )
+    
+  keys_list = []
+  for k in keys_rows:
+    keys_list.append({
+        "key": k[0],
+        "status": k[1],
+        "app_token": k[2],
+    })
+  return jsonify({"status": "success", "keys": keys_list})
+
+
+@app.route("/api/bot/delete_user", methods=["POST"])
+def api_bot_delete_user():
+  data = request.json or {}
+  username = data.get("username")
+  if not username:
+    return jsonify({"status": "error", "message": "Username missing"}), 400
+
+  db("DELETE FROM tool_users WHERE username=?", (username,))
+  return jsonify(
+      {"status": "success", "message": f"User {username} deleted successfully."}
+  )
+
+
+@app.route("/api/bot/delete_key", methods=["POST"])
+def api_bot_delete_key():
+  data = request.json or {}
+  key_text = data.get("key") or data.get("key_text")
+  if not key_text:
+    return jsonify({"status": "error", "message": "Key missing"}), 400
+
+  db("DELETE FROM keys WHERE key_text=?", (key_text,))
+  return jsonify(
+      {"status": "success", "message": f"License key {key_text} deleted successfully."}
+  )
 
 @app.route("/api/bot/create_key", methods=["POST"])
 def api_bot_create_key():

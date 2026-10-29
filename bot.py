@@ -235,7 +235,7 @@ async def get_app_keys(app_token):
             f"{payload.get('message', response.text[:300])}"
         )
 
-    keys = payload.get("keys", payload.get("data", []))
+    keys = payload.get("keys", [])
     if not isinstance(keys, list):
         keys = []
 
@@ -315,10 +315,7 @@ class AppActionSelect(discord.ui.Select):
 
         try:
             if self.action == "deletekey":
-                try:
-                    users = await get_app_keys(app_token)
-                except Exception:
-                    users = await get_app_users(app_token)
+                users = await get_app_keys(app_token)
             else:
                 users = await get_app_users(app_token)
         except Exception as exc:
@@ -363,8 +360,8 @@ class AppActionSelect(discord.ui.Select):
             if not matched_user:
                 return await interaction.response.edit_message(
                     embed=make_embed(
-                        "🔴 USER NOT FOUND",
-                        f"User `{clean(self.target_username)}` not found in **{clean(app_name)}**.",
+                        "🔴 NOT FOUND",
+                        f"Item `{clean(self.target_username)}` not found in **{clean(app_name)}**.",
                         RED,
                         interaction.user,
                         self.action
@@ -396,7 +393,7 @@ class AppActionSelect(discord.ui.Select):
             return await interaction.response.edit_message(
                 embed=make_embed(
                     "NO ITEMS FOUND",
-                    f"No items returned for **{clean(app_name)}**.",
+                    f"No items found for **{clean(app_name)}**.",
                     YELLOW,
                     interaction.user,
                     self.action
@@ -530,7 +527,6 @@ class ConfirmActionView(discord.ui.View):
     async def confirm(self, interaction: discord.Interaction, button):
         action_title = self.action.upper()
         
-        # Correct path and payload mapping for key deletion vs user deletion
         if self.action == "deletekey":
             path = "/api/bot/delete_key"
             payload_data = {"key": self.username, "app_token": self.app_token}
@@ -592,7 +588,7 @@ class ConfirmActionView(discord.ui.View):
                 )
 
             if self.action in ("delete", "deletekey"):
-                public_desc = f"Key / User `{clean(self.username)}` permanently deleted from vault."
+                public_desc = f"Key / Item `{clean(self.username)}` permanently deleted from vault."
                 public_title = "LICENSE KEY DELETED" if self.action == "deletekey" else "USER DELETED"
             elif self.action == "resethwid":
                 public_desc = f"HWID for user `{clean(self.username)}` has been successfully reset."

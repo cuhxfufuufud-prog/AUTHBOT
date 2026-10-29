@@ -856,8 +856,11 @@ DASHBOARD_HTML = (
     </div>
 
     <div id="tab-keys" class="hidden">
-      <h1 class="text-2xl font-black">License Keys</h1>
-      <div class="glass-card mt-6 rounded-2xl p-6">
+      <div class="flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-black">License Keys</h1>
+        <button onclick="createKey()" class="bg-gradient-to-r from-cyan-400 to-indigo-600 hover:opacity-90 px-5 py-2.5 rounded-xl text-xs font-bold shadow-[0_0_15px_rgba(34,211,238,0.4)] transition">+ Create New Key</button>
+      </div>
+      <div class="glass-card rounded-2xl p-6">
         <div class="space-y-3 text-xs font-mono">{{keys_list_html}}</div>
       </div>
     </div>
@@ -972,6 +975,22 @@ async function deleteApp(token) {
     let data = await res.json();
     alert(data.message);
     location.reload();
+}
+
+async function createKey() {
+    let token = document.getElementById('tokenDisplay').innerText;
+    if(!token || token.includes('Create') || token.includes('Token')) {
+        alert('Please select or create a valid application first!');
+        return;
+    }
+    let res = await fetch('/api/create_key', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({app_token: token})
+    });
+    let data = await res.json();
+    alert(data.message || data.error || 'Key creation processed.');
+    if(res.ok) location.reload();
 }
 
 function copyToken() {
@@ -1163,8 +1182,8 @@ def dash():
   if keys:
     keys_list_html = "".join([
         (
-            "<div class='flex justify-between bg-black/80 border"
-            " border-white/10 rounded-xl px-4 py-3'>"
+            "<div class='flex justify-between items-center bg-black/80 border"
+            " border-white/10 rounded-xl px-4 py-3 mb-2'>"
             f"<span>{k[1]}</span>"
             f"<span class='{'text-green-400' if k[3] == 'unused' else 'text-red-400'}'>"
             f"● {k[3]}</span></div>"
@@ -1318,8 +1337,43 @@ def api_delete_app():
 
   db("DELETE FROM apps WHERE token=?", (token,))
   db("DELETE FROM tool_users WHERE app_token=?", (token,))
+  db("DELETE FROM keys WHERE app_token=?", (token,))
 
   return jsonify({"message": "Application deleted successfully."})
+
+
+@app.route("/api/create_key", methods=["POST"])
+def api_create_key():
+  if "user" not in session:
+    return jsonify({"error": "Unauthorized"}), 401
+
+  email = session["user"]["email"]
+  data = request.json or {}
+  app_token = data.get("app_token")
+
+  if not app_token:
+    return jsonify({"message": "App token missing!"}), 400
+
+  app_check = db(
+      "SELECT * FROM apps WHERE token=? AND owner_email=?", (app_token, email), True
+  )
+  if not app_check:
+    return jsonify({"message": "Invalid App Token or unauthorized!"}), 403
+
+  if check_limit(email):
+    return jsonify({"message": "Plan limit reached!"}), 403
+
+  random_key_part = "".join(random.choices(string.ascii_uppercase + string.digits, k=16))
+  key_text = f"HSL-KEY-{random_key_part}"
+
+  try:
+    db(
+        "INSERT INTO keys (key_text, app_token, status, created_at) VALUES (?,?,?,?)",
+        (key_text, app_token, "unused", datetime.now().isoformat(timespec="seconds")),
+    )
+    return jsonify({"message": f"Key Created: {key_text}", "key": key_text}), 200
+  except Exception as e:
+    return jsonify({"message": "Could not create key due to a server error."}), 500
 
 
 @app.route("/api/create_user", methods=["POST"])

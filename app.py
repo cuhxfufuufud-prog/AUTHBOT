@@ -1319,7 +1319,7 @@ def api_auth():
         return jsonify({"status": "valid", "message": "Access granted successfully."}), 200
 
     return jsonify({"status": "error", "message": "Incorrect credentials"}), 400
-    
+
 @app.route("/api/create_app", methods=["POST"])
 def api_create_app():
   if "user" not in session:
@@ -1597,11 +1597,12 @@ def api_auth_login():
     username = data.get("username")
     password = data.get("password")
     hwid = data.get("hwid")
-    token = data.get("token")
+    token = data.get("token") or data.get("app_token")
     client_sig = data.get("sig")
     client_ip = request.remote_addr
+    license_key = data.get("licensekey") or username
 
-    if not username or not password or not token or not hwid:
+    if not username or not token or not hwid:
         return jsonify({"status": "invalid", "message": "Malformed request parameters"}), 400
 
     expected_sig = hashlib.sha256(f"{username}:{hwid}:{token}".encode()).hexdigest()
@@ -1609,10 +1610,30 @@ def api_auth_login():
         send_login_log(username, "tampered", hwid, client_ip)
         return jsonify({"status": "tampered", "message": "Request payload tampered!"}), 403
 
+    # 1. Pehle 'tool_users' table check karo
     res = db("SELECT id, username, password, app_token, status, hwid, created_at, expiry_type, expires_at FROM tool_users WHERE username=? AND password=? AND app_token=?", (username, password, token), True)
-    if not res:
-        send_login_log(username, "invalid_credentials", hwid, client_ip)
-        return jsonify({"status": "invalid", "message": "Incorrect credentials"})
+    
+    if res:
+        user = res[0]
+        # HWID lock logic
+        db_hwid = user[5]
+        if not db_hwid:
+            db("UPDATE tool_users SET hwid=?, status='active' WHERE id=?", (hwid, user[0]))
+        elif db_hwid != hwid:
+            send_login_log(username, "hwid_mismatch", hwid, client_ip)
+            return jsonify({"status": "invalid", "message": "HWID mismatch! Key locked to another PC."})
+        
+        send_login_log(username, "success", hwid, client_ip)
+        return jsonify({"status": "valid", "message": "Login successful", "expiry": "Lifetime"})
+
+    # 2. Agar tool_users me nahi hai, toh 'keys' table check karo (jo bot se generate hoti hain HSL-KEY-...)
+    key_res = db("SELECT key_text, status, app_token FROM keys WHERE key_text=?", (license_key,), True)
+    if key_res:
+        send_login_log(license_key, "success", hwid, client_ip)
+        return jsonify({"status": "valid", "message": "Login successful via License Key", "expiry": "Lifetime"})
+
+    send_login_log(username, "invalid_credentials", hwid, client_ip)
+    return jsonify({"status": "invalid", "message": "Incorrect credentials"})
 
     user_row = res[0]
     expiry_type = user_row[7] if len(user_row) > 7 and user_row[7] else "lifetime"

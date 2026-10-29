@@ -1765,17 +1765,7 @@ def api_bot_get_users():
   return jsonify({"status": "success", "keys": keys_list})
 
 
-@app.route("/api/bot/delete_user", methods=["POST"])
-def api_bot_delete_user():
-  data = request.json or {}
-  username = data.get("username")
-  if not username:
-    return jsonify({"status": "error", "message": "Username missing"}), 400
 
-  db("DELETE FROM tool_users WHERE username=?", (username,))
-  return jsonify(
-      {"status": "success", "message": f"User {username} deleted successfully."}
-  )
 
 
 @app.route("/api/bot/delete_key", methods=["POST"])

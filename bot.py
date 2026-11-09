@@ -751,7 +751,7 @@ class CreateAppView(discord.ui.View):
 
 
 # =========================================================
-# CREATE LICENSE KEY SELECTOR & VIEW (UPDATED WITH CUSTOM NAME & DAYS)
+# CREATE LICENSE KEY SELECTOR & VIEW (WITH ANIMATION & CUSTOM NAME)
 # =========================================================
 class CreateKeyAppSelect(discord.ui.Select):
     def __init__(self, owner_id, key_name, expiry_type, days, apps):
@@ -786,10 +786,41 @@ class CreateKeyAppSelect(discord.ui.Select):
         app_rows = [row for row in get_apps() if row[1] == app_token]
         app_name = app_rows[0][0] if app_rows else "Selected application"
 
+        create_stages = [
+            ("`[ █░░░░░░░░░ ] 10% • Initializing Secure Handshake`", 0.4),
+            ("`[ ████░░░░░░ ] 40% • Preparing Custom Key & Expiry`", 0.4),
+            ("`[ ███████░░░ ] 70% • Registering Key in Vault`", 0.4),
+            ("`[ ██████████ ] 100% • Provisioning Complete`", 0.3)
+        ]
+
+        display_key_label = self.key_name if self.key_name else "Random Generated"
+        expiry_display = "Lifetime" if self.expiry_type == "lifetime" else f"{self.days} Day(s)"
+
         await interaction.edit_original_response(
-            embed=make_embed("GENERATING LICENSE KEY...", "Creating new license key...", CYAN, interaction.user, "createkey"),
+            embed=make_embed(
+                "GENERATING LICENSE KEY...",
+                f"```ansi\n\x1b[1;36m🔄 Generating License Key Protocol...\x1b[0m\n```\n"
+                f"» **Key Name:** `{clean(display_key_label)}`\n» **Duration:** `{expiry_display}`\n\n{create_stages[0][0]}",
+                CYAN,
+                interaction.user,
+                "createkey"
+            ),
             view=None
         )
+        await asyncio.sleep(create_stages[0][1])
+
+        for bar_text, delay in create_stages[1:]:
+            await interaction.edit_original_response(
+                embed=make_embed(
+                    "GENERATING LICENSE KEY...",
+                    f"```ansi\n\x1b[1;36m🔄 Generating License Key Protocol...\x1b[0m\n```\n"
+                    f"» **Key Name:** `{clean(display_key_label)}`\n» **Duration:** `{expiry_display}`\n\n{bar_text}",
+                    CYAN,
+                    interaction.user,
+                    "createkey"
+                )
+            )
+            await asyncio.sleep(delay)
 
         try:
             payload = {
@@ -799,6 +830,7 @@ class CreateKeyAppSelect(discord.ui.Select):
             if self.key_name:
                 payload["key_name"] = self.key_name
                 payload["custom_key"] = self.key_name
+                payload["key"] = self.key_name
             if self.expiry_type == "custom":
                 payload["days"] = self.days
                 payload["expiry_days"] = self.days
@@ -806,10 +838,9 @@ class CreateKeyAppSelect(discord.ui.Select):
             response = await api("POST", "/api/bot/create_key", json=payload)
             payload_res = parse_api_response(response)
             message = str(payload_res.get("message", payload_res.get("error", "No message returned.")))
-            key_text = payload_res.get("key") or payload_res.get("license_key")
+            key_text = payload_res.get("key") or payload_res.get("license_key") or self.key_name
 
             if response.status_code == 200 and key_text:
-                expiry_display = "Lifetime" if self.expiry_type == "lifetime" else f"{self.days} Day(s)"
                 success_embed = make_embed(
                     "🔑 LICENSE KEY GENERATED",
                     f"**Application:** `{clean(app_name)}`\n\n"

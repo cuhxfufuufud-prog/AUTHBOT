@@ -1308,7 +1308,7 @@ def api_auth():
     if not license_key:
         return jsonify({"status": "error", "message": "Key missing"}), 400
 
-    # 1. Keys table me check karo (jo bot se generate hoti hain HSL-KEY-...)
+    # 1. Keys table me check karo
     key_row = db("SELECT key_text, status FROM keys WHERE key_text=?", (license_key,), fetch=True)
     if key_row:
         return jsonify({"status": "valid", "message": "Access granted successfully."}), 200
@@ -1395,8 +1395,12 @@ def api_create_key():
   if check_limit(email):
     return jsonify({"message": "Plan limit reached!"}), 403
 
-  random_key_part = "".join(random.choices(string.ascii_uppercase + string.digits, k=16))
-  key_text = f"HSL-KEY-{random_key_part}"
+  custom_name = data.get("key_name") or data.get("custom_key") or data.get("key")
+  if custom_name and str(custom_name).strip():
+      key_text = str(custom_name).strip()
+  else:
+      random_key_part = "".join(random.choices(string.ascii_uppercase + string.digits, k=16))
+      key_text = f"HSL-KEY-{random_key_part}"
 
   try:
     db(
@@ -1404,6 +1408,8 @@ def api_create_key():
         (key_text, app_token, "unused", datetime.now().isoformat(timespec="seconds")),
     )
     return jsonify({"message": f"Key Created: {key_text}", "key": key_text}), 200
+  except sqlite3.IntegrityError:
+    return jsonify({"message": f"Key '{key_text}' already exists!"}), 409
   except Exception as e:
     return jsonify({"message": "Could not create key due to a server error."}), 500
 
@@ -1548,7 +1554,6 @@ def send_login_log(username, status_msg, hwid, ip_addr):
     current_time = int(time.time())
     timestamp_str = f"<t:{current_time}:F> (<t:{current_time}:R>)"
     
-    # Normalize status_msg to lowercase to avoid case mismatch issues
     status_lower = str(status_msg).lower()
     
     if status_lower == "valid" or status_lower == "success":
@@ -1586,8 +1591,6 @@ def send_login_log(username, status_msg, hwid, ip_addr):
         }]
     }
     
-    # Add your requests.post code here to send the payload to Discord webhook
-    
     try:
         requests.post(DISCORD_LOG_WEBHOOK_URL, json=payload, timeout=3)
     except Exception as e:
@@ -1620,7 +1623,6 @@ def api_auth_login():
     
     if res:
         user = res[0]
-        # HWID lock logic
         db_hwid = user[5]
         if not db_hwid:
             db("UPDATE tool_users SET hwid=?, status='active' WHERE id=?", (hwid, user[0]))
@@ -1631,7 +1633,7 @@ def api_auth_login():
         send_login_log(username, "success", hwid, client_ip)
         return jsonify({"status": "valid", "message": "Login successful", "expiry": "Lifetime"})
 
-    # 2. Agar tool_users me nahi hai, toh 'keys' table check karo (jo bot se generate hoti hain HSL-KEY-...)
+    # 2. Agar tool_users me nahi hai, toh 'keys' table check karo
     key_res = db("SELECT key_text, status, app_token FROM keys WHERE key_text=?", (license_key,), True)
     if key_res:
         send_login_log(license_key, "success", hwid, client_ip)
@@ -1640,46 +1642,10 @@ def api_auth_login():
     send_login_log(username, "invalid_credentials", hwid, client_ip)
     return jsonify({"status": "invalid", "message": "Incorrect credentials"})
 
-    user_row = res[0]
-    expiry_type = user_row[7] if len(user_row) > 7 and user_row[7] else "lifetime"
-    expires_at = user_row[8] if len(user_row) > 8 else None
-    
-    def is_tool_user_expired(exp_str):
-        if not exp_str:
-            return False
-        try:
-            return datetime.now() > datetime.fromisoformat(exp_str)
-        except Exception:
-            return False
-
-    if expiry_type == "custom" and is_tool_user_expired(expires_at):
-        send_login_log(username, "expired", hwid, client_ip)
-        return jsonify({"status": "expired", "message": "License expired. Contact the owner."}), 403
-
-    if user_row[4] == "banned":
-        send_login_log(username, "banned_attempt", hwid, client_ip)
-        return jsonify({"status": "banned", "message": "Account suspended"})
-
-    if not user_row[5]:
-        db("UPDATE tool_users SET hwid=?, status='active' WHERE username=? AND app_token=?", (hwid, username, token))
-        send_login_log(username, "valid (HWID Bound)", hwid, client_ip)
-        return jsonify({"status": "valid", "message": "HWID Bound Successfully"})
-    else:
-        if user_row[5] == hwid:
-            send_login_log(username, "valid", hwid, client_ip)
-            return jsonify({"status": "valid", "message": "Authentication Success"})
-        else:
-            send_login_log(username, "hwid_mismatch", hwid, client_ip)
-            return jsonify({"status": "hwid_mismatch", "message": "Hardware mismatch detected"})
-
 
 # ==========================================
-# DISCORD BOT INTEGRATION API ENDPOINTS (APP_TOKEN FILTERING FIXED)
+# DISCORD BOT INTEGRATION API ENDPOINTS
 # ==========================================
-
-
-
-
 
 @app.route("/api/bot/toggle_ban", methods=["POST"])
 def api_bot_toggle_ban():
@@ -1718,12 +1684,6 @@ def api_bot_reset_hwid():
       "message": f"HWID reset successfully for {username}.",
   })
 
-# ==========================================
-# DISCORD BOT INTEGRATION API ENDPOINTS (FIXED & KEYS ROUTE ADDED)
-# ==========================================
-
-
-
 
 @app.route("/api/bot/keys", methods=["GET"])
 def api_bot_get_keys():
@@ -1761,10 +1721,6 @@ def api_bot_delete_user():
   )
 
 
-# ==========================================
-# DISCORD BOT INTEGRATION API ENDPOINTS (FIXED & KEYS ROUTE ADDED)
-# ==========================================
-
 @app.route("/api/bot/users", methods=["GET"])
 def api_bot_get_users():
   app_token = request.args.get("app_token")
@@ -1789,30 +1745,6 @@ def api_bot_get_users():
   return jsonify({"status": "success", "users": users_list})
 
 
-
-  
-  if app_token:
-    keys_rows = db(
-        "SELECT key_text, status, app_token FROM keys WHERE app_token=?", (app_token,), fetch=True
-    )
-  else:
-    keys_rows = db(
-        "SELECT key_text, status, app_token FROM keys", fetch=True
-    )
-    
-  keys_list = []
-  for k in keys_rows:
-    keys_list.append({
-        "key": k[0],
-        "status": k[1],
-        "app_token": k[2],
-    })
-  return jsonify({"status": "success", "keys": keys_list})
-
-
-
-
-
 @app.route("/api/bot/delete_key", methods=["POST"])
 def api_bot_delete_key():
   data = request.json or {}
@@ -1825,6 +1757,7 @@ def api_bot_delete_key():
       {"status": "success", "message": f"License key {key_text} deleted successfully."}
   )
 
+
 @app.route("/api/bot/create_key", methods=["POST"])
 def api_bot_create_key():
     data = request.json or {}
@@ -1832,14 +1765,21 @@ def api_bot_create_key():
     if not app_token:
         return jsonify({"status": "error", "message": "App token missing"}), 400
     
-    random_key_part = "".join(random.choices(string.ascii_uppercase + string.digits, k=16))
-    key_text = f"HSL-KEY-{random_key_part}"
+    custom_name = data.get("key_name") or data.get("custom_key") or data.get("key")
+    if custom_name and str(custom_name).strip():
+        key_text = str(custom_name).strip()
+    else:
+        random_key_part = "".join(random.choices(string.ascii_uppercase + string.digits, k=16))
+        key_text = f"HSL-KEY-{random_key_part}"
+        
     try:
         db(
             "INSERT INTO keys (key_text, app_token, status, created_at) VALUES (?,?,?,?)",
             (key_text, app_token, "unused", datetime.now(timezone.utc).isoformat(timespec="seconds")),
         )
         return jsonify({"status": "success", "message": f"Key Created: {key_text}", "key": key_text}), 200
+    except sqlite3.IntegrityError:
+        return jsonify({"status": "error", "message": f"Key '{key_text}' already exists!"}), 409
     except Exception as e:
         return jsonify({"status": "error", "message": "Could not create key."}), 500
 

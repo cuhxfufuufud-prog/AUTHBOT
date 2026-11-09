@@ -751,11 +751,15 @@ class CreateAppView(discord.ui.View):
 
 
 # =========================================================
-# CREATE LICENSE KEY SELECTOR & VIEW (WITH RED EMOJI STICKER)
+# CREATE LICENSE KEY SELECTOR & VIEW (UPDATED WITH CUSTOM NAME & DAYS)
 # =========================================================
 class CreateKeyAppSelect(discord.ui.Select):
-    def __init__(self, owner_id, apps):
+    def __init__(self, owner_id, key_name, expiry_type, days, apps):
         self.owner_id = owner_id
+        self.key_name = key_name
+        self.expiry_type = expiry_type
+        self.days = days
+
         try:
             dropdown_emoji = discord.PartialEmoji.from_str(RED_EMOJI)
         except Exception:
@@ -788,21 +792,36 @@ class CreateKeyAppSelect(discord.ui.Select):
         )
 
         try:
-            response = await api("POST", "/api/bot/create_key", json={"app_token": app_token})
-            payload = parse_api_response(response)
-            message = str(payload.get("message", payload.get("error", "No message returned.")))
-            key_text = payload.get("key")
+            payload = {
+                "app_token": app_token,
+                "expiry_type": self.expiry_type
+            }
+            if self.key_name:
+                payload["key_name"] = self.key_name
+                payload["custom_key"] = self.key_name
+            if self.expiry_type == "custom":
+                payload["days"] = self.days
+                payload["expiry_days"] = self.days
+
+            response = await api("POST", "/api/bot/create_key", json=payload)
+            payload_res = parse_api_response(response)
+            message = str(payload_res.get("message", payload_res.get("error", "No message returned.")))
+            key_text = payload_res.get("key") or payload_res.get("license_key")
 
             if response.status_code == 200 and key_text:
+                expiry_display = "Lifetime" if self.expiry_type == "lifetime" else f"{self.days} Day(s)"
                 success_embed = make_embed(
                     "🔑 LICENSE KEY GENERATED",
-                    f"**Application:** `{clean(app_name)}`\n\n» **License Key:** `{clean(key_text)}`\n» **Status:** `unused`",
+                    f"**Application:** `{clean(app_name)}`\n\n"
+                    f"» **License Key:** `{clean(key_text)}`\n"
+                    f"» **Duration:** `{expiry_display}`\n"
+                    f"» **Status:** `unused`",
                     GREEN,
                     interaction.user,
                     "createkey"
                 )
                 await interaction.edit_original_response(embed=success_embed)
-                await audit(f"**License Key Generated**\n**App:** `{clean(app_name)}`\n**Key:** `{clean(key_text)}`", GREEN)
+                await audit(f"**License Key Generated**\n**App:** `{clean(app_name)}`\n**Key:** `{clean(key_text)}`\n**Duration:** `{expiry_display}`", GREEN)
             else:
                 await interaction.edit_original_response(
                     embed=make_embed("🔴 KEY GENERATION FAILED", f"HTTP `{response.status_code}`\n```{message[:1000]}```", RED, interaction.user, "createkey")
@@ -812,10 +831,10 @@ class CreateKeyAppSelect(discord.ui.Select):
 
 
 class CreateKeyAppView(discord.ui.View):
-    def __init__(self, owner_id, apps):
+    def __init__(self, owner_id, key_name, expiry_type, days, apps):
         super().__init__(timeout=120)
         self.owner_id = owner_id
-        self.add_item(CreateKeyAppSelect(owner_id, apps))
+        self.add_item(CreateKeyAppSelect(owner_id, key_name, expiry_type, days, apps))
 
 
 # =========================================================
@@ -940,16 +959,17 @@ async def create(interaction: discord.Interaction, username: str, password: str,
     )
 
 
-@bot.tree.command(name="createkey", description="🔑 Generate a license key after selecting an app")
-async def createkey(interaction: discord.Interaction):
+@bot.tree.command(name="createkey", description="🔑 Generate a custom or random license key with days")
+@app_commands.choices(expiry_type=[app_commands.Choice(name="Custom Days", value="custom"), app_commands.Choice(name="Lifetime", value="lifetime")])
+async def createkey(interaction: discord.Interaction, expiry_type: app_commands.Choice[str], key_name: str = None, days: int = 0):
     if await deny(interaction, "createkey"): return
     apps = get_apps()
     if not apps:
         return await interaction.response.send_message(embed=make_embed("📦 NO APPS", "Register an app first.", YELLOW, interaction.user, "createkey"), ephemeral=True)
     
-    view = CreateKeyAppView(interaction.user.id, apps)
+    view = CreateKeyAppView(interaction.user.id, key_name.strip() if key_name else None, expiry_type.value, days, apps)
     await interaction.response.send_message(
-        embed=make_embed("HSL Auth Key Generator", "Select target Application below to generate a new license key:\n\n👇 **SELECT APPLICATION**", CYAN, interaction.user, "createkey"),
+        embed=make_embed("HSL Auth Key Generator", "Select target Application below to generate your license key:\n\n👇 **SELECT APPLICATION**", CYAN, interaction.user, "createkey"),
         view=view
     )
 
